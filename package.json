@@ -5,6 +5,7 @@
   "scripts": {
     "init": "node scripts/init.js",
     "sync": "node scripts/sync.js",
+    "build": "node scripts/build.js",
     "update_patches": "node scripts/updatePatches.js",
     "apply_patches": "node scripts/applyPatches.js"
   },
