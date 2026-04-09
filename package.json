@@ -1,0 +1,12 @@
+{
+  "name": "latrodectus-gn",
+  "version": "1.0.0",
+  "description": "Latrodectus GN build system with patch management",
+  "scripts": {
+    "init": "node scripts/init.js",
+    "sync": "node scripts/sync.js",
+    "update_patches": "node scripts/updatePatches.js",
+    "apply_patches": "node scripts/applyPatches.js"
+  },
+  "license": "BSD-3-Clause"
+}
