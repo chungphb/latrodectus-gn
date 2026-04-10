@@ -23,6 +23,23 @@ const fmt = {
   bgBlack: '\x1b[40m',
 }
 
+function loadEnv() {
+  const envPath = path.join(ROOT_DIR, '.env')
+  if (fs.existsSync(envPath)) {
+    const content = fs.readFileSync(envPath, 'utf8')
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim()
+      if (trimmed && !trimmed.startsWith('#')) {
+        const [key, ...valueParts] = trimmed.split('=')
+        const value = valueParts.join('=')
+        if (key && value && !process.env[key]) {
+          process.env[key] = value
+        }
+      }
+    }
+  }
+}
+
 function logStart(scriptName) {
   console.log(`${fmt.bgBlack}${fmt.white}Start ${scriptName}${fmt.reset}`)
 }
@@ -79,6 +96,7 @@ module.exports = {
   GN_REPO,
   SEPARATOR,
   fmt,
+  loadEnv,
   logStart,
   logFinish,
   run,

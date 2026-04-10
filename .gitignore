@@ -6,3 +6,6 @@ out/
 
 # Patchinfo (generated locally)
 patches/*.patchinfo
+
+# Local environment
+.env

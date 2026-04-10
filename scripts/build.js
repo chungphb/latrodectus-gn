@@ -8,12 +8,17 @@ const fs = require('fs')
 const path = require('path')
 const util = require('./lib/util')
 
+
 function findNinja() {
   const candidates = [
     '/opt/homebrew/bin/ninja',
     '/usr/local/bin/ninja',
-    path.join(process.env.HOME, 'latrodectus-browser/src/third_party/ninja/ninja'),
   ]
+
+  // Add chromium ninja if CHROMIUM_SRC is set
+  if (process.env.CHROMIUM_SRC) {
+    candidates.push(path.join(process.env.CHROMIUM_SRC, 'third_party/ninja/ninja'))
+  }
 
   // Try system ninja first
   try {
@@ -32,6 +37,8 @@ function findNinja() {
 }
 
 async function main() {
+  util.loadEnv()
+
   util.logStart('build')
   console.log(util.SEPARATOR)
 
@@ -39,6 +46,7 @@ async function main() {
   const ninja = findNinja()
   if (!ninja) {
     console.error('Error: ninja not found. Install with: brew install ninja')
+    console.error('Or set CHROMIUM_SRC in .env to use Chromium\'s ninja')
     process.exit(1)
   }
 
