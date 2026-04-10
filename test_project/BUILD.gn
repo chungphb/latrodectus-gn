@@ -1,0 +1,12 @@
+source_set("helper") { sources = [] }
+
+# Test update_target
+update_target("//:my_target") { deps += [ ":helper" ] }
+group("my_target") { deps = [] }
+
+# Test update_template_instance
+template("my_template") {
+  group(target_name) { forward_variables_from(invoker, "*") }
+}
+update_template_instance("//:templated") { deps += [ ":helper" ] }
+my_template("templated") { deps = [] }

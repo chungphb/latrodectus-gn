@@ -1,0 +1,4 @@
+toolchain("default") {
+  tool("stamp") { command = "touch {{output}}" description = "STAMP" }
+  tool("copy") { command = "cp {{source}} {{output}}" description = "COPY" }
+}
