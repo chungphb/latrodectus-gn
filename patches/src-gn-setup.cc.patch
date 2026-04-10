@@ -1,0 +1,11 @@
+diff --git a/src/gn/setup.cc b/src/gn/setup.cc
+--- a/src/gn/setup.cc
++++ b/src/gn/setup.cc
+@@ -515,6 +515,7 @@ bool Setup::RunPostMessageLoop(const base::CommandLine& cmdline) {
+   }
+
+   if (!build_settings_.build_args().VerifyAllOverridesUsed(&err)) {
++    LATRODECTUS_GN_SETUP_RUN_POST_MESSAGE_LOOP
+     if (cmdline.HasSwitch(switches::kFailOnUnusedArgs)) {
+       err.PrintToStdout();
+       return false;
