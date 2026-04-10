@@ -1,12 +1,86 @@
-source_set("helper") { sources = [] }
+# =============================================================================
+# Test Project for update_target and update_template_instance
+# =============================================================================
 
-# Test update_target
-update_target("//:my_target") { deps += [ ":helper" ] }
-group("my_target") { deps = [] }
-
-# Test update_template_instance
-template("my_template") {
-  group(target_name) { forward_variables_from(invoker, "*") }
+source_set("helper") {
+  sources = []
 }
-update_template_instance("//:templated") { deps += [ ":helper" ] }
-my_template("templated") { deps = [] }
+
+# =============================================================================
+# TEST 1: Basic update_target
+# =============================================================================
+# The update is registered BEFORE the target is defined.
+# When group("basic") runs, the update { deps += [":helper"] } is applied.
+
+update_target("//:basic") {
+  deps += [ ":helper" ]
+}
+
+group("basic") {
+  deps = []
+}
+# Result: deps = [":helper"]
+
+# =============================================================================
+# TEST 2: Multiple updates for same target
+# =============================================================================
+# Multiple updates are applied in order.
+
+update_target("//:multi") {
+  deps += [ ":helper" ]
+}
+
+update_target("//:multi") {
+  defines = [ "UPDATED=1" ]
+}
+
+source_set("multi") {
+  sources = []
+  deps = []
+}
+# Result: deps = [":helper"], defines = ["UPDATED=1"]
+
+# =============================================================================
+# TEST 3: Update with existing values (+=)
+# =============================================================================
+# Shows that += correctly reads the target's existing value.
+
+update_target("//:append") {
+  sources += [ "extra.cc" ]  # Reads sources=["main.cc"], appends "extra.cc"
+}
+
+source_set("append") {
+  sources = [ "main.cc" ]
+}
+# Result: sources = ["main.cc", "extra.cc"]
+
+# =============================================================================
+# TEST 4: update_template_instance
+# =============================================================================
+# Updates a target created by a template, not the template itself.
+
+template("my_template") {
+  group(target_name) {
+    forward_variables_from(invoker, "*")
+  }
+}
+
+update_template_instance("//:from_template") {
+  deps += [ ":helper" ]
+}
+
+my_template("from_template") {
+  deps = []
+}
+# Result: deps = [":helper"]
+
+# =============================================================================
+# Aliases for backward compatibility with old test names
+# =============================================================================
+group("my_target") {
+  deps = [ ":basic" ]
+}
+
+group("templated") {
+  deps = [ ":from_template" ]
+}

@@ -79,48 +79,59 @@ bool UpdateTheTarget(Scope* scope,
     return true;
   }
 
-  // Build the full target label (e.g., "//:my_target") to look up updates.
+  // Build target labels for lookup and tracking.
+  // Lookup uses label WITHOUT toolchain (matches all toolchain variants).
+  // Tracking uses label WITH toolchain (each variant updated once).
   const std::string& target_name = args[0].string_value();
   Label current_label = MakeLabelForScope(scope, function, target_name);
-  std::string full_label = current_label.GetUserVisibleName(true);
+  std::string lookup_label = current_label.GetUserVisibleName(false);
+  std::string tracking_label = current_label.GetUserVisibleName(true);
 
   auto& updaters = Scope::GetTargetUpdaters();
-  auto it = updaters.find(full_label);
+  auto it = updaters.find(lookup_label);
 
   // No updates registered for this target.
   if (it == updaters.end()) {
     return true;
   }
 
-  // Prevent applying updates multiple times to the same target.
-  // This can happen when the same BUILD.gn is processed for multiple
-  // toolchains - each toolchain invokes the target definition again.
-  if (it->second.targets_done.count(target_name)) {
+  // Prevent applying updates multiple times to the same target+toolchain.
+  // Each toolchain variant is updated independently.
+  if (it->second.targets_done.count(tracking_label)) {
     return true;
   }
 
   it->second.used = true;
-  it->second.targets_done.insert(target_name);
+  it->second.targets_done.insert(tracking_label);
 
-  // Apply each registered update in order.
+  // Apply each registered update in order. Each update contains the block
+  // to execute (update.first) and the SAVED SCOPE captured at registration
+  // time (update.second).
   for (auto& update : it->second.updates) {
-    // Keep target's existing values, don't copy _private variables,
-    // and mark merged vars as used.
-    Scope::MergeOptions options;
-    options.prefer_existing = true;
-    options.skip_private_vars = true;
-    options.mark_dest_used = true;
-
-    // Execute the update block in a temporary scope.
-    Scope update_scope(update.second.get());
-    update.first->Execute(&update_scope, err);
+    // Merge SAVED SCOPE into EXTRA SCOPE with prefer_existing,
+    // so target's current values take precedence over saved values.
+    Scope::MergeOptions prefer_options;
+    prefer_options.prefer_existing = true;
+    Scope extra_scope(scope);
+    update.second->NonRecursiveMergeTo(&extra_scope, prefer_options, function,
+                                       "update_target import", err);
     if (err->has_error()) {
       return false;
     }
 
-    // Merge the update results into the target's scope.
-    scope->NonRecursiveMergeTo(scope, options, update.first, "update_target",
-                               err);
+    // Execute the update block in BLOCK SCOPE.
+    Scope block_scope(&extra_scope);
+    update.first->Execute(&block_scope, err);
+    if (err->has_error()) {
+      return false;
+    }
+
+    // Merge BLOCK SCOPE back into TARGET SCOPE with clobber_existing,
+    // so the update values override the originals.
+    Scope::MergeOptions clobber_options;
+    clobber_options.clobber_existing = true;
+    block_scope.NonRecursiveMergeTo(scope, clobber_options, function,
+                                    "update_target merge", err);
     if (err->has_error()) {
       return false;
     }
@@ -132,18 +143,19 @@ bool UpdateTheTarget(Scope* scope,
 // update_template_instance ----------------------------------------------------
 const char kUpdateTemplate[] = "update_template_instance";
 const char kUpdateTemplate_HelpShort[] =
-    "update_template_instance: Modify targets created by a template.";
+    "update_template_instance: Modify a template instantiation by label.";
 const char kUpdateTemplate_Help[] =
-    R"(update_template_instance: Modify targets created by a template.
+    R"(update_template_instance: Modify a template instantiation by label.
 
-  update_template_instance(template_name) {
+  update_template_instance(target_label) {
     # modifications
   }
 
-  Allows modifying properties of targets created by a specific template.
+  Allows modifying properties of a target created by a template instantiation.
+  The target_label should match the label of the template instantiation.
 
 Example:
-  update_template_instance("component") {
+  update_template_instance("//foo:bar") {
     deps += [ "//extra:dep" ]
   }
 )";
@@ -176,54 +188,70 @@ Value RunUpdateTemplate(Scope* scope,
   return Value();
 }
 
-// Called when a target is created inside a template to apply template updates.
-// Uses the template invocation stack to determine which template created
-// the current target.
+// Called during template instantiation to apply template updates.
+// Uses label-based lookup similar to UpdateTheTarget.
 bool UpdateTheTemplate(Scope* scope,
                        const FunctionCallNode* function,
                        const std::vector<Value>& args,
                        BlockNode* block,
                        Err* err,
                        Scope* function_scope) {
-  std::vector<Scope::TemplateInvocationEntry> entries =
-      scope->GetTemplateInvocationEntries();
-
-  // Not inside a template.
-  if (entries.empty()) {
+  if (args.empty()) {
     return true;
   }
 
-  // Use the most recent (innermost) template invocation.
-  const std::string& template_name = entries.back().template_name;
-  auto& updaters = Scope::GetTemplateInstanceUpdaters();
-  auto it = updaters.find(template_name);
+  // Build target labels for lookup and tracking.
+  // Use function_scope (outer scope) for source dir resolution.
+  const std::string& target_name = args[0].string_value();
+  Label current_label =
+      MakeLabelForScope(function_scope, function, target_name);
+  std::string lookup_label = current_label.GetUserVisibleName(false);
+  std::string tracking_label = current_label.GetUserVisibleName(true);
 
-  // No updates registered for this template.
+  auto& updaters = Scope::GetTemplateInstanceUpdaters();
+  auto it = updaters.find(lookup_label);
+
+  // No updates registered for this target.
   if (it == updaters.end()) {
     return true;
   }
 
+  // Prevent applying updates multiple times to the same target+toolchain.
+  if (it->second.targets_done.count(tracking_label)) {
+    return true;
+  }
+
   it->second.used = true;
+  it->second.targets_done.insert(tracking_label);
 
-  // Apply each registered update in order.
+  // Apply each registered update in order. Each update contains the block
+  // to execute (update.first) and the SAVED SCOPE captured at registration
+  // time (update.second).
   for (auto& update : it->second.updates) {
-    // Keep target's existing values, don't copy _private variables,
-    // and mark merged vars as used.
-    Scope::MergeOptions options;
-    options.prefer_existing = true;
-    options.skip_private_vars = true;
-    options.mark_dest_used = true;
-
-    // Execute the update block in a temporary scope.
-    Scope update_scope(update.second.get());
-    update.first->Execute(&update_scope, err);
+    // Merge SAVED SCOPE into EXTRA SCOPE with prefer_existing,
+    // so target's current values take precedence over saved values.
+    Scope::MergeOptions prefer_options;
+    prefer_options.prefer_existing = true;
+    Scope extra_scope(scope);
+    update.second->NonRecursiveMergeTo(&extra_scope, prefer_options, function,
+                                       "update_template import", err);
     if (err->has_error()) {
       return false;
     }
 
-    // Merge into the function scope (the scope where the target is defined).
-    function_scope->NonRecursiveMergeTo(function_scope, options, update.first,
-                                        "update_template_instance", err);
+    // Execute the update block in BLOCK SCOPE.
+    Scope block_scope(&extra_scope);
+    update.first->Execute(&block_scope, err);
+    if (err->has_error()) {
+      return false;
+    }
+
+    // Merge BLOCK SCOPE back into TARGET SCOPE with clobber_existing,
+    // so the update values override the originals.
+    Scope::MergeOptions clobber_options;
+    clobber_options.clobber_existing = true;
+    block_scope.NonRecursiveMergeTo(scope, clobber_options, function,
+                                    "update_template merge", err);
     if (err->has_error()) {
       return false;
     }

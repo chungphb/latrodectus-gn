@@ -150,23 +150,24 @@ group("foo") {
 
 ### Toolchain Handling
 
-When building for multiple toolchains, the same target definition runs multiple times. The `update_target` mechanism uses a `targets_done` set to prevent applying updates multiple times:
+When building for multiple toolchains, the same target definition runs multiple times. The `update_target` mechanism applies updates to ALL toolchain variants independently:
 
 ```
 //:my_target                      ← default toolchain (update applied)
-//:my_target(//toolchain:arm64)   ← cross-compile (update skipped)
+//:my_target(//toolchain:arm64)   ← cross-compile (update applied)
 ```
 
-This ensures consistent behavior and prevents duplicate entries in lists.
+Each toolchain variant is tracked separately using its full label (with toolchain suffix), ensuring each variant is updated exactly once.
 
 ## How It Works Internally
 
 1. **Registration**: `update_target()` stores the update block in a static map (block is NOT executed yet)
 2. **Deferred Execution**: The block and a scope snapshot are stored for later
 3. **Application**: When `ExecuteGenericTarget()` runs, it calls `UpdateTheTarget()`
-4. **Merge**: The update block executes in a temporary scope, then merges into the target's scope
-5. **Deduplication**: `targets_done` prevents re-applying for multiple toolchains
-6. **Verification**: At build end, `VerifyAllUpdatesUsed()` warns about unused updates
+4. **Label Matching**: Uses label WITHOUT toolchain for lookup (matches all variants)
+5. **Tracking**: Uses label WITH toolchain for `targets_done` (each variant updated once)
+6. **Merge**: Saved scope merges with `prefer_existing`, block executes, results merge with `clobber_existing`
+7. **Verification**: At build end, `VerifyAllUpdatesUsed()` warns about unused updates
 
 ## Warnings
 
@@ -186,11 +187,48 @@ This usually means:
 
 ## Testing
 
-A test project is available at `test_project/`:
+A test project is available at `test_project/`. From the project root:
 
 ```bash
-cd test_project
-../out/gn gen out --root=.
-../out/gn desc out //:my_target deps      # Shows :helper was added
-../out/gn desc out //:templated deps      # Shows :helper was added
+# 1. Build GN with patches
+npm run apply_patches
+npm run build
+
+# 2. Generate build files for test project
+./out/gn gen test_project/out --root=test_project
+
+# 3. Verify updates were applied
+./out/gn desc test_project/out //:my_target deps --root=test_project
+# Expected: //:helper
+
+./out/gn desc test_project/out //:templated deps --root=test_project
+# Expected: //:helper
+```
+
+### Test project structure
+
+```
+test_project/
+├── .gn                 # Points to BUILDCONFIG.gn
+├── BUILD.gn            # Contains update_target and update_template_instance tests
+├── BUILDCONFIG.gn      # Sets default toolchain
+└── toolchain/
+    └── BUILD.gn        # Defines the toolchain
+```
+
+### test_project/BUILD.gn
+
+```gn
+source_set("helper") { sources = [] }
+
+# Test update_target
+update_target("//:my_target") { deps += [ ":helper" ] }
+group("my_target") { deps = [] }
+
+# Test update_template_instance
+template("my_template") {
+  group(target_name) { forward_variables_from(invoker, "*") }
+}
+update_template_instance("//:templated") { deps += [ ":helper" ] }
+my_template("templated") { deps = [] }
 ```

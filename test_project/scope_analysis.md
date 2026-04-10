@@ -1,318 +1,275 @@
-# Scope Analysis: How update_target Works
+# How update_target Works
 
-This document explains how **Scopes** work in the GN build system and how `update_target` leverages them to modify targets.
+## The Key Idea
 
-## What is a Scope?
-
-A **Scope** is a container for variables during GN script execution. Scopes are **nested** (hierarchical):
-
-- **Writing** goes into the current (top-level) scope
-- **Reading** searches recursively through parent scopes until a match is found
-
-```
-┌─────────────────────────────┐
-│  Build Config Scope         │  ← Global variables (host_cpu, etc.)
-│  ┌───────────────────────┐  │
-│  │  File Scope           │  │  ← Variables in BUILD.gn
-│  │  ┌─────────────────┐  │  │
-│  │  │  Block Scope    │  │  │  ← Variables inside a target/template
-│  │  └─────────────────┘  │  │
-│  └───────────────────────┘  │
-└─────────────────────────────┘
-```
-
-## Step-by-Step: Scope Lifecycle in test_project
-
-### Initial State: GN Starts Up
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  GLOBAL SCOPE (Build Config)                            │
-│  ├── host_cpu = "x64"                                   │
-│  ├── host_os = "mac"                                    │
-│  ├── current_toolchain = "//toolchain:default"          │
-│  └── ... (built-in variables)                           │
-└─────────────────────────────────────────────────────────┘
-```
-
-GN creates a **global scope** with built-in variables. This is the root of all scopes.
-
----
-
-### Step 1: Parse BUILDCONFIG.gn
+`update_target` lets you modify a target's variables **after** it runs, without editing the original code.
 
 ```gn
-set_default_toolchain("//toolchain:default")
-```
+# Register update BEFORE target
+update_target("//:basic") {
+  deps += [ ":helper" ]
+}
 
-```
-┌─────────────────────────────────────────────────────────┐
-│  GLOBAL SCOPE                                           │
-│  ├── default_toolchain = "//toolchain:default"          │
-│  └── ...                                                │
-└─────────────────────────────────────────────────────────┘
-```
+# Target runs, then update is applied
+group("basic") {
+  deps = []
+}
 
-The global scope is updated with the default toolchain.
+# Final result: deps = [":helper"]
+```
 
 ---
 
-### Step 2: Parse BUILD.gn - Line 1: `source_set("helper")`
+## Example 1: Basic Update
 
-GN creates a **new child scope** for this target:
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  GLOBAL SCOPE                                           │
-│  │                                                      │
-│  │  ┌─────────────────────────────────────────────┐     │
-│  │  │  BLOCK SCOPE for source_set("helper")       │     │
-│  │  │  ├── target_name = "helper"                 │     │
-│  │  │  ├── sources = []                           │     │
-│  │  │  └── (parent: GLOBAL SCOPE)                 │     │
-│  │  └─────────────────────────────────────────────┘     │
-│  │                                                      │
-└─────────────────────────────────────────────────────────┘
-```
-
-**What happens internally:**
-
-```cpp
-// In ExecuteGenericTarget()
-Scope block_scope(scope);  // Create child scope, parent = file scope
-block_scope.SetValue("target_name", "helper");
-
-// Execute the block { sources = [] }
-block->Execute(&block_scope, err);  // Sets sources = [] in block_scope
-
-// Target is created from block_scope's values
-TargetGenerator::GenerateTarget(&block_scope, function, args, target_type, err);
-```
-
-After execution, the block scope is **destroyed** - but the target data is saved.
-
----
-
-### Step 3: Parse BUILD.gn - Line 4: `update_target("//:my_target")`
-
+### BUILD.gn
 ```gn
-update_target("//:my_target") { deps += [ ":helper" ] }
-```
+update_target("//:basic") {
+  deps += [ ":helper" ]
+}
 
-This does **NOT** execute the block yet! It just **registers** it:
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  GLOBAL SCOPE                                           │
-│  │                                                      │
-│  │  STATIC MAP: Scope::GetTargetUpdaters()              │
-│  │  ┌─────────────────────────────────────────────┐     │
-│  │  │  "//:my_target" → {                         │     │
-│  │  │    updates: [                               │     │
-│  │  │      (block_node, update_scope)  ← Stored!  │     │
-│  │  │    ],                                       │     │
-│  │  │    used: false                              │     │
-│  │  │  }                                          │     │
-│  │  └─────────────────────────────────────────────┘     │
-│  │                                                      │
-└─────────────────────────────────────────────────────────┘
-```
-
-**What happens internally** (see `chromium_src/gn/functions_target.cc:33-55`):
-
-```cpp
-Value RunUpdateTarget(Scope* scope, ..., BlockNode* block, ...) {
-  const std::string& target_label = args[0].string_value();  // "//:my_target"
-
-  // Get the global static map
-  auto& updaters = Scope::GetTargetUpdaters();
-
-  // Create an update_scope that remembers the current scope as parent
-  std::unique_ptr<Scope> update_scope(new Scope(scope));
-
-  // Store the block + scope for later execution
-  updaters[target_label].updates.push_back(
-      std::make_pair(block, std::move(update_scope)));
-
-  return Value();  // Block is NOT executed yet!
+group("basic") {
+  deps = []
 }
 ```
 
-The block `{ deps += [ ":helper" ] }` is **saved but not run**.
+### What Happens Step by Step
+
+**Step 1: `update_target` is called**
+```
+Block { deps += [":helper"] } is SAVED, not executed.
+
+SAVED DATA:
+  "//:basic" → { block: { deps += [":helper"] } }
+```
+
+**Step 2: `group("basic")` runs**
+```
+TARGET SCOPE created:
+  deps = []
+  target_name = "basic"
+```
+
+**Step 3: Update is applied**
+```
+1. Create EXTRA SCOPE (child of TARGET SCOPE)
+   - Can read deps from parent → Gets []
+
+2. Create BLOCK SCOPE (child of EXTRA SCOPE)
+   - Execute: deps += [":helper"]
+   - Read deps from parent chain → []
+   - Compute: [] + [":helper"] = [":helper"]
+   - Write: deps = [":helper"]
+
+3. Merge BLOCK SCOPE back to TARGET SCOPE
+   - TARGET SCOPE now has: deps = [":helper"]
+```
+
+**Final Result:**
+```
+deps = [":helper"]
+```
 
 ---
 
-### Step 4: Parse BUILD.gn - Line 5: `group("my_target")`
+## Example 2: Append to Existing Values
 
+### BUILD.gn
 ```gn
-group("my_target") { deps = [] }
-```
+update_target("//:append") {
+  sources += [ "extra.cc" ]
+}
 
-Now GN creates a scope for this target AND applies the update:
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  GLOBAL SCOPE                                           │
-│  │                                                      │
-│  │  ┌─────────────────────────────────────────────┐     │
-│  │  │  BLOCK SCOPE for group("my_target")         │     │
-│  │  │  ├── target_name = "my_target"              │     │
-│  │  │  ├── deps = []           ← Initially empty  │     │
-│  │  │  └── (parent: GLOBAL SCOPE)                 │     │
-│  │  └─────────────────────────────────────────────┘     │
-│  │                      │                               │
-│  │                      ▼                               │
-│  │            UPDATE IS APPLIED HERE                    │
-│  │                      │                               │
-│  │                      ▼                               │
-│  │  ┌─────────────────────────────────────────────┐     │
-│  │  │  BLOCK SCOPE (after update)                 │     │
-│  │  │  ├── target_name = "my_target"              │     │
-│  │  │  ├── deps = [":helper"]  ← Updated!         │     │
-│  │  │  └── (parent: GLOBAL SCOPE)                 │     │
-│  │  └─────────────────────────────────────────────┘     │
-│  │                                                      │
-└─────────────────────────────────────────────────────────┘
-```
-
-**What happens internally** (see `chromium_src/gn/functions_target.cc:57-103`):
-
-```cpp
-// Called at the END of ExecuteGenericTarget(), after block executes
-bool UpdateTheTarget(Scope* scope, ...) {
-  // 1. Build the full label: "//:my_target"
-  Label current_label = MakeLabelForScope(scope, function, "my_target");
-  std::string full_label = current_label.GetUserVisibleName(true);
-
-  // 2. Look up in the static map
-  auto& updaters = Scope::GetTargetUpdaters();
-  auto it = updaters.find(full_label);  // Found! "//:my_target" exists
-
-  // 3. For each registered update...
-  for (auto& update : it->second.updates) {
-    // Create a temporary scope with the stored parent
-    Scope update_scope(update.second.get());
-
-    // 4. Execute the block: { deps += [ ":helper" ] }
-    //    This reads `deps` from block_scope (gets [])
-    //    Then appends ":helper" → deps = [":helper"]
-    update.first->Execute(&update_scope, err);
-
-    // 5. Merge the results back into the target's scope
-    Scope::MergeOptions options;
-    options.prefer_existing = true;   // Keep target's existing values
-    options.skip_private_vars = true; // Don't copy _private vars
-    options.mark_dest_used = true;    // Mark as used
-
-    scope->NonRecursiveMergeTo(scope, options, ...);
-  }
+source_set("append") {
+  sources = [ "main.cc" ]
 }
 ```
 
----
+### What Happens
 
-## The Magic: How `deps += [":helper"]` Works
-
-When the update block executes:
-
+**Step 1: Target runs**
 ```
-┌────────────────────────────────────────────────────────────────┐
-│  UPDATE_SCOPE (temporary)                                      │
-│  ├── parent: stored_update_scope                               │
-│  │   └── parent: GLOBAL SCOPE (from when update was registered)│
-│  │                                                             │
-│  │  Executing: deps += [ ":helper" ]                           │
-│  │                                                             │
-│  │  Step 1: Read `deps`                                        │
-│  │          → Not in update_scope                              │
-│  │          → Not in stored_update_scope                       │
-│  │          → Check block_scope? NO! Not linked                │
-│  │          → Result: deps = [] (or error if undefined)        │
-│  │                                                             │
-│  │  Step 2: Append ":helper"                                   │
-│  │          → deps = [] + [":helper"] = [":helper"]            │
-│  │                                                             │
-│  │  Step 3: Write `deps` to update_scope                       │
-│  │          → update_scope.deps = [":helper"]                  │
-│  │                                                             │
-└────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼ NonRecursiveMergeTo()
-┌────────────────────────────────────────────────────────────────┐
-│  BLOCK_SCOPE (target's scope)                                  │
-│  ├── deps = []  (before merge)                                 │
-│  │                                                             │
-│  │  Merge with prefer_existing = true:                         │
-│  │  → block_scope has deps = []                                │
-│  │  → update_scope has deps = [":helper"]                      │
-│  │  → Result: deps = [":helper"]  (update wins for +=)         │
-│  │                                                             │
-│  └── deps = [":helper"]  (after merge)                         │
-└────────────────────────────────────────────────────────────────┘
+TARGET SCOPE:
+  sources = ["main.cc"]
+```
+
+**Step 2: Update is applied**
+```
+1. Create EXTRA SCOPE (child of TARGET SCOPE)
+   - Can read sources from parent → Gets ["main.cc"]
+
+2. Create BLOCK SCOPE (child of EXTRA SCOPE)
+   - Execute: sources += ["extra.cc"]
+   - Read sources from parent chain → ["main.cc"]
+   - Compute: ["main.cc"] + ["extra.cc"]
+   - Write: sources = ["main.cc", "extra.cc"]
+
+3. Merge BLOCK SCOPE back to TARGET SCOPE
+   - TARGET SCOPE now has: sources = ["main.cc", "extra.cc"]
 ```
 
 ---
 
-## Summary Diagram: Complete Flow
+## Example 3: Multiple Updates
 
+### BUILD.gn
+```gn
+update_target("//:multi") {
+  deps += [ ":helper" ]
+}
+
+update_target("//:multi") {
+  defines = [ "UPDATED=1" ]
+}
+
+source_set("multi") {
+  sources = []
+  deps = []
+}
 ```
-TIME
-  │
-  ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ 1. BUILDCONFIG.gn executes                                      │
-│    → Global scope initialized                                   │
-└─────────────────────────────────────────────────────────────────┘
-  │
-  ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ 2. source_set("helper") executes                                │
-│    → Creates block_scope (child of global)                      │
-│    → Sets sources = []                                          │
-│    → Block_scope destroyed, target saved                        │
-└─────────────────────────────────────────────────────────────────┘
-  │
-  ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ 3. update_target("//:my_target") called                         │
-│    → Block { deps += [":helper"] } NOT executed                 │
-│    → Stored in static map with scope snapshot                   │
-└─────────────────────────────────────────────────────────────────┘
-  │
-  ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ 4. group("my_target") executes                                  │
-│    → Creates block_scope                                        │
-│    → Runs { deps = [] }                                         │
-│    → At END: UpdateTheTarget() called                           │
-│      → Finds "//:my_target" in map                              │
-│      → Executes stored block { deps += [":helper"] }            │
-│      → Merges result into block_scope                           │
-│    → Final deps = [":helper"]                                   │
-└─────────────────────────────────────────────────────────────────┘
+
+### What Happens
+
+**After target runs:**
+```
+TARGET SCOPE:
+  sources = []
+  deps = []
+```
+
+**First update applied:**
+```
+1. Create EXTRA SCOPE (child of TARGET SCOPE)
+   - Can read deps from parent → Gets []
+
+2. Create BLOCK SCOPE (child of EXTRA SCOPE)
+   - Execute: deps += [":helper"]
+   - Read deps from parent chain → []
+   - Compute: [] + [":helper"] = [":helper"]
+   - Write: deps = [":helper"]
+
+3. Merge BLOCK SCOPE back to TARGET SCOPE
+   - TARGET SCOPE now has: deps = [":helper"]
+```
+
+**Second update applied:**
+```
+1. Create EXTRA SCOPE (child of TARGET SCOPE)
+   - Can read deps from parent → Gets [":helper"]
+
+2. Create BLOCK SCOPE (child of EXTRA SCOPE)
+   - Execute: defines = ["UPDATED=1"]
+   - Write: defines = ["UPDATED=1"]
+
+3. Merge BLOCK SCOPE back to TARGET SCOPE
+   - TARGET SCOPE now has: deps = [":helper"], defines = ["UPDATED=1"]
 ```
 
 ---
 
-## Key Takeaways
+## 3 Scopes Explained
 
-| Concept | What It Does |
-|---------|--------------|
-| **Scope** | Container for variables during execution |
-| **Parent scope** | Allows reading variables from outer contexts |
-| **Static map** | Stores updates globally, keyed by target label |
-| **Deferred execution** | Update block runs only when target is defined |
-| **NonRecursiveMergeTo** | Copies variables from update scope to target scope |
+### The 3 Runtime Scopes
 
-The key insight is that `update_target` **doesn't modify anything when called** - it just stores the block for later. The actual modification happens inside `ExecuteGenericTarget()` after the target's own block runs.
+When an update runs, there are 3 scopes:
+
+```
+TARGET SCOPE          ← The actual target (has deps, sources, etc.)
+  │
+  └── EXTRA SCOPE     ← Bridge: target vars + SAVED SCOPE vars merged in
+        │
+        └── BLOCK SCOPE   ← Where update code runs (isolated writes)
+```
+
+### SAVED SCOPE
+
+When `update_target()` is called, it saves a snapshot of the current scope:
+
+```gn
+# In //latrodectus/updates.gni
+latrodectus_extra_dep = "//latrodectus:core"
+
+update_target("//base:base") {
+  deps += [ latrodectus_extra_dep ]  # Needs latrodectus_extra_dep from SAVED SCOPE
+}
+```
+
+The SAVED SCOPE captures `latrodectus_extra_dep` so it's available later when the update runs.
+
+### Why EXTRA SCOPE?
+
+EXTRA SCOPE bridges TWO contexts:
+1. **TARGET SCOPE** (via parent chain) → Read target's current `deps`, `sources`, etc.
+2. **SAVED SCOPE** (via merge) → Read variables like `latrodectus_extra_dep` from registration time
+
+```
+BLOCK SCOPE reads deps → EXTRA → TARGET → Found!
+BLOCK SCOPE reads latrodectus_extra_dep → EXTRA → Found! (merged from SAVED)
+```
+
+Without EXTRA SCOPE, the update block couldn't access registration-time variables.
+
+| Scope | Why It Exists |
+|-------|---------------|
+| SAVED SCOPE | Captured when `update_target()` called. Holds context variables. |
+| TARGET SCOPE | The real target being modified. |
+| EXTRA SCOPE | Bridge that combines TARGET + SAVED for reading. |
+| BLOCK SCOPE | Isolates WRITES so we can merge them cleanly. |
+
+**The flow:**
+1. SAVED SCOPE vars merged into EXTRA SCOPE
+2. Update block READS through parent chain (BLOCK → EXTRA → TARGET)
+3. Update block WRITES to BLOCK SCOPE
+4. BLOCK SCOPE is merged back to TARGET SCOPE
+
+---
 
 ## Testing
 
-Verify the behavior:
-
 ```bash
-cd test_project
-../out/gn gen out --root=.
-../out/gn desc out //:my_target deps      # Shows :helper was added
-../out/gn desc out //:templated deps      # Shows :helper was added
+# From project root
+npm run build
+./out/gn gen test_project/out --root=test_project
+
+# Test 1: Basic update
+./out/gn desc test_project/out //:basic deps --root=test_project
+# Expected: //:helper
+
+# Test 2: Multiple updates
+./out/gn desc test_project/out //:multi deps --root=test_project
+./out/gn desc test_project/out //:multi defines --root=test_project
+# Expected: //:helper
+# Expected: UPDATED=1
+
+# Test 3: Append to existing
+./out/gn desc test_project/out //:append sources --root=test_project
+# Expected: main.cc, extra.cc
+
+# Test 4: Template instance
+./out/gn desc test_project/out //:from_template deps --root=test_project
+# Expected: //:helper
+```
+
+---
+
+## Common Mistakes
+
+### Wrong: Update AFTER target
+```gn
+group("foo") { deps = [] }           # Target runs first
+update_target("//:foo") { ... }      # Update registered too late!
+# WARNING: Unused update_target update
+```
+
+### Right: Update BEFORE target
+```gn
+update_target("//:foo") { ... }      # Register first
+group("foo") { deps = [] }           # Target runs, update applied
+```
+
+### Wrong: Wrong label
+```gn
+update_target("//wrong:label") { ... }   # Typo in label
+group("foo") { ... }                     # Never matches
+# WARNING: Unused update_target update
 ```
