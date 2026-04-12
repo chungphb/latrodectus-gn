@@ -1,8 +1,10 @@
 // Hook in ExecuteGenericTarget() after block execution.
-// Applies any pending update_target() modifications to the target.
-#define LATRODECTUS_GN_FUNCTIONS_TARGET_EXECUTE_GENERIC_TARGET           \
-  if (!UpdateTheTarget(&block_scope, function, args, block, err)) { \
-    return Value();                                                 \
+// First checks if target is disabled, then applies any pending updates.
+#define LATRODECTUS_GN_FUNCTIONS_TARGET_EXECUTE_GENERIC_TARGET                  \
+  if (IsTargetDisabled(&block_scope, function, args)) {                    \
+    ClearTargetScope(&block_scope);                                        \
+  } else if (!UpdateTheTarget(&block_scope, function, args, block, err)) { \
+    return Value();                                                        \
   }
 
 #include "../../gn/src/gn/functions_target.cc"
@@ -258,6 +260,80 @@ bool UpdateTheTemplate(Scope* scope,
   }
 
   return true;
+}
+
+// disable_target
+// ---------------------------------------------------------------
+const char kDisableTarget[] = "disable_target";
+const char kDisableTarget_HelpShort[] =
+    "disable_target: Disable a target, making it a no-op.";
+const char kDisableTarget_Help[] =
+    R"(disable_target: Disable a target, making it a no-op.
+
+  disable_target(target_label)
+
+  Marks a target to be disabled. When the target is defined, it will be
+  converted to an empty target with no sources or deps. This is useful for
+  excluding targets without patching the original BUILD.gn files.
+
+  The target_label should match the label used when the target is defined.
+
+Example:
+  disable_target("//foo:bar")
+)";
+
+// Registers a target to be disabled. The target will still be defined
+// but will have no sources, deps, or other properties.
+Value RunDisableTarget(Scope* scope,
+                       const FunctionCallNode* function,
+                       const std::vector<Value>& args,
+                       Err* err) {
+  if (args.size() != 1) {
+    *err = Err(function, "disable_target requires exactly one argument.");
+    return Value();
+  }
+
+  if (!args[0].VerifyTypeIs(Value::STRING, err)) {
+    return Value();
+  }
+
+  const std::string& target_label = args[0].string_value();
+  auto& disabled = Scope::GetDisabledTargets();
+  disabled[target_label].origin = function;
+
+  return Value();
+}
+
+// Checks if a target is disabled by looking up its label.
+// Marks the disabled target as used when matched.
+bool IsTargetDisabled(Scope* scope,
+                      const FunctionCallNode* function,
+                      const std::vector<Value>& args) {
+  if (args.empty()) {
+    return false;
+  }
+
+  const std::string& target_name = args[0].string_value();
+  Label current_label = MakeLabelForScope(scope, function, target_name);
+  std::string lookup_label = current_label.GetUserVisibleName(false);
+
+  auto& disabled = Scope::GetDisabledTargets();
+  auto it = disabled.find(lookup_label);
+  if (it != disabled.end()) {
+    it->second.used = true;
+    return true;
+  }
+  return false;
+}
+
+// Clears common target variables from the scope, making it an empty target.
+void ClearTargetScope(Scope* scope) {
+  scope->SetValue("sources", Value(nullptr, Value::LIST), nullptr);
+  scope->SetValue("deps", Value(nullptr, Value::LIST), nullptr);
+  scope->SetValue("public_deps", Value(nullptr, Value::LIST), nullptr);
+  scope->SetValue("data_deps", Value(nullptr, Value::LIST), nullptr);
+  scope->SetValue("inputs", Value(nullptr, Value::LIST), nullptr);
+  scope->SetValue("data", Value(nullptr, Value::LIST), nullptr);
 }
 
 }  // namespace functions

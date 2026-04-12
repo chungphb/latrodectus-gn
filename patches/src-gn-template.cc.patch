@@ -1,4 +1,5 @@
 diff --git a/src/gn/template.cc b/src/gn/template.cc
+index a01cd8c1ead707ec2275cdc897503f44c7854ed2..241b9d38add8711dcedb54f76753a15a2e2acbc7 100644
 --- a/src/gn/template.cc
 +++ b/src/gn/template.cc
 @@ -58,6 +58,7 @@ Value Template::Invoke(Scope* scope,
@@ -7,5 +8,5 @@ diff --git a/src/gn/template.cc b/src/gn/template.cc
        return Value();
 +    LATRODECTUS_GN_TEMPLATE_INVOKE
    }
-
+ 
    // Set up the scope to run the template and set the current directory for the

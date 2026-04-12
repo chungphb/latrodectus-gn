@@ -40,6 +40,22 @@ bool UpdateTheTemplate(Scope* scope,
                        Err* err,
                        Scope* function_scope);
 
+// disable_target
+extern const char kDisableTarget[];
+extern const char kDisableTarget_HelpShort[];
+extern const char kDisableTarget_Help[];
+
+Value RunDisableTarget(Scope* scope,
+                       const FunctionCallNode* function,
+                       const std::vector<Value>& args,
+                       Err* err);
+
+bool IsTargetDisabled(Scope* scope,
+                      const FunctionCallNode* function,
+                      const std::vector<Value>& args);
+
+void ClearTargetScope(Scope* scope);
+
 }  // namespace functions
 
 #endif  // LATRODECTUS_CHROMIUM_SRC_GN_FUNCTIONS_H_

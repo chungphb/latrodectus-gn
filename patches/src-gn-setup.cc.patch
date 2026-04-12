@@ -1,9 +1,10 @@
 diff --git a/src/gn/setup.cc b/src/gn/setup.cc
+index f11dfce0559dcc758a1325828393ebf456215838..89095ef7dd8a915db707647ec63da41b8d99e2a4 100644
 --- a/src/gn/setup.cc
 +++ b/src/gn/setup.cc
 @@ -515,6 +515,7 @@ bool Setup::RunPostMessageLoop(const base::CommandLine& cmdline) {
    }
-
+ 
    if (!build_settings_.build_args().VerifyAllOverridesUsed(&err)) {
 +    LATRODECTUS_GN_SETUP_RUN_POST_MESSAGE_LOOP
      if (cmdline.HasSwitch(switches::kFailOnUnusedArgs)) {

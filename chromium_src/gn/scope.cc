@@ -18,8 +18,10 @@ Scope::UpdateParseItem::~UpdateParseItem() = default;
 
 Scope::UpdateParseMap Scope::target_update_list;
 Scope::UpdateParseMap Scope::template_update_list;
+Scope::DisabledTargetMap Scope::disabled_targets;
 
-// Verify all update_target/update_template_instance calls were used
+// Verify all update_target/update_template_instance/disable_target calls were
+// used
 namespace {
 bool VerifyAllUpdatesInListUsed(Scope::UpdateParseMap& map,
                                 const std::string& name,
@@ -37,11 +39,25 @@ bool VerifyAllUpdatesInListUsed(Scope::UpdateParseMap& map,
   }
   return true;
 }
+
+bool VerifyAllDisabledTargetsUsed(Scope::DisabledTargetMap& map, Err* err) {
+  for (const auto& it : map) {
+    if (!it.second.used && it.second.origin) {
+      std::string help = "You set disable_target for the label \"" + it.first +
+                         "\" here but it was never matched.\n";
+      *err =
+          it.second.origin->MakeErrorDescribing("Unused disable_target.", help);
+      return false;
+    }
+  }
+  return true;
+}
 }  // namespace
 
 bool Scope::VerifyAllUpdatesUsed(Err* err) {
   return (
       VerifyAllUpdatesInListUsed(target_update_list, "update_target", err) &&
       VerifyAllUpdatesInListUsed(template_update_list,
-                                 "update_template_instance", err));
+                                 "update_template_instance", err) &&
+      VerifyAllDisabledTargetsUsed(disabled_targets, err));
 }
