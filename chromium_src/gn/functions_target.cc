@@ -39,6 +39,36 @@ Example:
 //
 // Multiple update_target() calls for the same label are allowed and will be
 // applied in order when the target is defined.
+// Normalizes a label string to fully-qualified form.
+// - "//foo/bar" -> "//foo/bar:bar" (add implicit target name)
+// - "//foo/bar:baz" -> "//foo/bar:baz" (already has target name)
+// - "//:foo" -> "//:foo" (root label already has target name)
+// - "bar" -> "<source_dir>:bar" (relative target name)
+std::string NormalizeLabelForScope(Scope* scope,
+                                   const FunctionCallNode* function,
+                                   const std::string& input) {
+  // If label already has a colon after //, it's already fully qualified
+  if (input.size() >= 2 && input[0] == '/' && input[1] == '/') {
+    size_t colon_pos = input.find(':');
+    if (colon_pos != std::string::npos) {
+      // Already has :target_name, use as-is
+      return input;
+    }
+    // No colon - add implicit target name from last path component
+    // e.g., "//foo/bar" -> "//foo/bar:bar"
+    size_t last_slash = input.rfind('/');
+    if (last_slash != std::string::npos && last_slash >= 2) {
+      std::string dir_name = input.substr(last_slash + 1);
+      return input + ":" + dir_name;
+    }
+    // Root case: "//" -> "//:BUILD.gn" (shouldn't happen in practice)
+    return input;
+  }
+  // Relative target name - use MakeLabelForScope
+  Label label = MakeLabelForScope(scope, function, input);
+  return label.GetUserVisibleName(false);
+}
+
 Value RunUpdateTarget(Scope* scope,
                       const FunctionCallNode* function,
                       const std::vector<Value>& args,
@@ -53,7 +83,12 @@ Value RunUpdateTarget(Scope* scope,
     return Value();
   }
 
-  const std::string& target_label = args[0].string_value();
+  // Normalize the label to fully-qualified form (//foo/bar -> //foo/bar:bar)
+  // so it matches the lookup in UpdateTheTarget.
+  const std::string& target_label_input = args[0].string_value();
+  std::string target_label =
+      NormalizeLabelForScope(scope, function, target_label_input);
+
   auto& updaters = Scope::GetTargetUpdaters();
 
   // Create a scope snapshot that captures the current scope as parent.
@@ -184,7 +219,12 @@ Value RunUpdateTemplate(Scope* scope,
     return Value();
   }
 
-  const std::string& template_name = args[0].string_value();
+  // Normalize the label to fully-qualified form (//foo/bar -> //foo/bar:bar)
+  // so it matches the lookup in UpdateTheTemplate.
+  const std::string& template_name_input = args[0].string_value();
+  std::string template_name =
+      NormalizeLabelForScope(scope, function, template_name_input);
+
   auto& updaters = Scope::GetTemplateInstanceUpdaters();
 
   std::unique_ptr<Scope> update_scope(new Scope(scope));
@@ -304,9 +344,21 @@ Value RunDisableTarget(Scope* scope,
     return Value();
   }
 
-  const std::string& target_label = args[0].string_value();
+  const std::string& target_label_input = args[0].string_value();
   auto& disabled = Scope::GetDisabledTargets();
-  disabled[target_label].origin = function;
+
+  // Check for wildcard pattern (//foo:*)
+  if (target_label_input.size() >= 2 &&
+      target_label_input.substr(target_label_input.size() - 2) == ":*") {
+    // Store wildcard patterns as-is
+    disabled[target_label_input].origin = function;
+  } else {
+    // Normalize the label to fully-qualified form (//foo/bar -> //foo/bar:bar)
+    // so it matches the lookup in IsTargetDisabled.
+    std::string target_label =
+        NormalizeLabelForScope(scope, function, target_label_input);
+    disabled[target_label].origin = function;
+  }
 
   return Value();
 }
