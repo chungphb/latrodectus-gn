@@ -75,6 +75,19 @@ my_template("from_template") {
 # Result: deps = [":helper"]
 
 # =============================================================================
+# TEST 5: disable_target
+# =============================================================================
+# Disables a target, making it a no-op (empty sources, deps, etc.)
+
+disable_target("//:disabled_target")
+
+source_set("disabled_target") {
+  sources = [ "should_not_exist.cc" ]
+  deps = [ ":helper" ]
+}
+# Result: sources = [], deps = []
+
+# =============================================================================
 # Aliases for backward compatibility with old test names
 # =============================================================================
 group("my_target") {
