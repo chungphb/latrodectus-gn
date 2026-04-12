@@ -2,9 +2,15 @@
 # Test Project for update_target and update_template_instance
 # =============================================================================
 
+# Import updates from separate file (mimics latrodectus/gn/updates.gni pattern)
+import("//updates.gni")
+
 source_set("helper") {
   sources = []
 }
+
+# Dependency used by registration context test
+group("config_dep") {}
 
 # =============================================================================
 # TEST 1: Basic update_target
@@ -132,6 +138,25 @@ source_set("disabled_target") {
 # group("disable_file_test") {
 #   deps = [ "//disabled_dir:should_not_exist" ]
 # }
+
+# =============================================================================
+# TEST 9: Registration context variables
+# =============================================================================
+# Tests that update_target blocks can access variables from imports at
+# registration time (where update_target() was called).
+#
+# The update for this target is defined in //updates.gni, which imports
+# //config.gni. The update block uses test_feature_enabled and test_extra_dep
+# from that import.
+#
+# Before the fix (633ed94), this would fail with "undefined identifier" because
+# NonRecursiveMergeTo only copied direct values, not the parent chain where
+# imports reside.
+
+group("registration_context_test") {
+  deps = []
+}
+# Result: deps = [":config_dep"] (because test_feature_enabled=true)
 
 # =============================================================================
 # Aliases for backward compatibility with old test names

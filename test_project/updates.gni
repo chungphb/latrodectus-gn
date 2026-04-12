@@ -1,0 +1,16 @@
+# Test updates file for update_target registration context test
+# This simulates //latrodectus/gn/updates.gni in the real project
+#
+# The key test: variables from imports here (test_feature_enabled, test_extra_dep)
+# must be accessible in the update_target block.
+
+import("//config.gni")
+
+# TEST: Update block uses variables from imported config.gni
+# Before the fix (633ed94), this would fail with "undefined identifier"
+# because the import's parent chain was lost during NonRecursiveMergeTo.
+update_target("//:registration_context_test") {
+  if (test_feature_enabled) {
+    deps += [ test_extra_dep ]
+  }
+}
