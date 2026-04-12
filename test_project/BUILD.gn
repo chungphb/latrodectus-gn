@@ -98,6 +98,17 @@ source_set("disabled_target") {
 # }
 
 # =============================================================================
+# TEST 7: Wildcard disable_target
+# =============================================================================
+# disable_target("//subdir:*") disables all targets in //subdir/BUILD.gn
+# Uncommenting the line below causes gn gen to fail with an error because
+# the wildcard disables all targets in //subdir.
+
+# group("wildcard_test") {
+#   deps = [ "//subdir:target_a" ]
+# }
+
+# =============================================================================
 # Aliases for backward compatibility with old test names
 # =============================================================================
 group("my_target") {

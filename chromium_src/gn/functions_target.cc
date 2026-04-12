@@ -305,6 +305,7 @@ Value RunDisableTarget(Scope* scope,
 }
 
 // Checks if a target is disabled by looking up its label.
+// Supports both exact match (//foo:bar) and wildcard (//foo:*).
 // Marks the disabled target as used when matched.
 bool IsTargetDisabled(Scope* scope,
                       const FunctionCallNode* function,
@@ -318,11 +319,25 @@ bool IsTargetDisabled(Scope* scope,
   std::string lookup_label = current_label.GetUserVisibleName(false);
 
   auto& disabled = Scope::GetDisabledTargets();
+
+  // Check exact match
   auto it = disabled.find(lookup_label);
   if (it != disabled.end()) {
     it->second.used = true;
     return true;
   }
+
+  // Check wildcard match (//foo:* matches //foo:bar)
+  size_t colon_pos = lookup_label.rfind(':');
+  if (colon_pos != std::string::npos) {
+    std::string wildcard_label = lookup_label.substr(0, colon_pos + 1) + "*";
+    auto wit = disabled.find(wildcard_label);
+    if (wit != disabled.end()) {
+      wit->second.used = true;
+      return true;
+    }
+  }
+
   return false;
 }
 

@@ -15,6 +15,7 @@ disable_target(target_label)
 ### Parameters
 
 - `target_label`: The full label of the target to disable (e.g., `"//foo:bar"`)
+- Supports wildcard `*` to disable all targets in a directory (e.g., `"//foo:*"`)
 
 ### Example
 
@@ -129,8 +130,11 @@ npm run build
 ### Removing Unwanted Features
 
 ```gn
-# Disable a feature you don't want
+# Disable a single target
 disable_target("//third_party/feature:unwanted")
+
+# Disable all targets in a directory
+disable_target("//third_party/unwanted_lib:*")
 ```
 
 ### Platform-Specific Exclusions

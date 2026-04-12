@@ -83,8 +83,20 @@ bool Scope::CheckDepsOnDisabledTargets(
     for (const LabelTargetVector* deps : dep_lists) {
       for (const auto& dep : *deps) {
         std::string dep_label = dep.label.GetUserVisibleName(false);
-        auto it = disabled_targets.find(dep_label);
-        if (it != disabled_targets.end()) {
+
+        // Check exact match
+        bool is_disabled = disabled_targets.find(dep_label) != disabled_targets.end();
+
+        // Check wildcard match (//foo:* matches //foo:bar)
+        if (!is_disabled) {
+          size_t colon_pos = dep_label.rfind(':');
+          if (colon_pos != std::string::npos) {
+            std::string wildcard = dep_label.substr(0, colon_pos + 1) + "*";
+            is_disabled = disabled_targets.find(wildcard) != disabled_targets.end();
+          }
+        }
+
+        if (is_disabled) {
           std::string msg = "Target " +
                             target->label().GetUserVisibleName(false) +
                             " depends on disabled target " + dep_label + ".\n";
