@@ -88,6 +88,16 @@ source_set("disabled_target") {
 # Result: sources = [], deps = []
 
 # =============================================================================
+# TEST 6: Error for deps on disabled target
+# =============================================================================
+# Uncommenting this target causes gn gen to fail with an error because it
+# depends on a disabled target.
+
+# group("uses_disabled") {
+#   deps = [ ":disabled_target" ]
+# }
+
+# =============================================================================
 # Aliases for backward compatibility with old test names
 # =============================================================================
 group("my_target") {

@@ -1,6 +1,8 @@
 #ifndef LATRODECTUS_CHROMIUM_SRC_GN_SCOPE_H_
 #define LATRODECTUS_CHROMIUM_SRC_GN_SCOPE_H_
 
+class Target;
+
 // Hook to inject prefer_existing into MergeOptions
 #define clobber_existing \
   clobber_existing;      \
@@ -38,6 +40,8 @@
     return disabled_targets;                                           \
   }                                                                    \
   static bool VerifyAllUpdatesUsed(Err* err);                          \
+  static bool CheckDepsOnDisabledTargets(                              \
+      const std::vector<const Target*>& targets, Err* err);            \
                                                                        \
  private:                                                              \
   static UpdateParseMap target_update_list;                            \

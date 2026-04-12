@@ -1,3 +1,6 @@
+#include "gn/standard_out.h"
+#include "gn/target.h"
+
 // Hook in NonRecursiveMergeTo() to support prefer_existing option.
 // Skips merging if destination already has the value.
 #define LATRODECTUS_GN_SCOPE_NON_RECURSIVE_MERGE_TO \
@@ -60,4 +63,41 @@ bool Scope::VerifyAllUpdatesUsed(Err* err) {
       VerifyAllUpdatesInListUsed(template_update_list,
                                  "update_template_instance", err) &&
       VerifyAllDisabledTargetsUsed(disabled_targets, err));
+}
+
+bool Scope::CheckDepsOnDisabledTargets(
+    const std::vector<const Target*>& targets,
+    Err* err) {
+  if (disabled_targets.empty()) {
+    return true;
+  }
+
+  for (const Target* target : targets) {
+    // Check all dependency types
+    const LabelTargetVector* dep_lists[] = {
+        &target->private_deps(),
+        &target->public_deps(),
+        &target->data_deps(),
+    };
+
+    for (const LabelTargetVector* deps : dep_lists) {
+      for (const auto& dep : *deps) {
+        std::string dep_label = dep.label.GetUserVisibleName(false);
+        auto it = disabled_targets.find(dep_label);
+        if (it != disabled_targets.end()) {
+          std::string msg = "Target " +
+                            target->label().GetUserVisibleName(false) +
+                            " depends on disabled target " + dep_label + ".\n";
+          if (dep.origin) {
+            *err = Err(dep.origin, "Dependency on disabled target.", msg);
+          } else {
+            *err = Err(target->defined_from(), "Dependency on disabled target.",
+                       msg);
+          }
+          return false;
+        }
+      }
+    }
+  }
+  return true;
 }

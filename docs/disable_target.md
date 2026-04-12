@@ -4,7 +4,7 @@ Disables a target, making it a no-op with empty sources and deps.
 
 ## Overview
 
-`disable_target` allows you to disable a target without patching the original BUILD.gn file. The target will still be defined (so dependencies don't fail), but it will have no sources, deps, or other properties.
+`disable_target` allows you to disable a target without patching the original BUILD.gn file. The target will still be defined, but it will have no sources, deps, or other properties. Note that other targets cannot depend on a disabled target - `gn gen` will fail with an error if this is detected.
 
 ## Usage
 
@@ -74,16 +74,29 @@ disable_target("//foo:bar")
 disable_target(":bar")
 ```
 
-### Warning for Non-Existent Targets
+### Error for Non-Existent Targets
 
-If you disable a target that doesn't exist, you'll get a warning:
+If you disable a target that doesn't exist, you'll get an error:
 
 ```
-WARNING at //BUILD.gn:1:1: Unused disable_target.
+ERROR at //BUILD.gn:1:1: Unused disable_target.
 disable_target("//foo:nonexistent")
 ^-------------
 You set disable_target for the label "//foo:nonexistent" here but it was never matched.
 ```
+
+### Error for Dependencies on Disabled Targets
+
+If another target depends on a disabled target, `gn gen` will fail with an error:
+
+```
+ERROR at //BUILD.gn:10:12: Dependency on disabled target.
+  deps = [ ":disabled_target" ]
+           ^-----------------
+Target //:my_target depends on disabled target //:disabled_target.
+```
+
+This prevents broken builds where a target expects its dependency to provide something, but the dependency has been disabled.
 
 ## Cleared Variables
 
