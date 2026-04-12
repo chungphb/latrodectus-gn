@@ -108,6 +108,7 @@ When a target is disabled, these variables are cleared to empty lists:
 - `data_deps`
 - `inputs`
 - `data`
+- `defines`
 
 ## Testing
 

@@ -334,6 +334,7 @@ void ClearTargetScope(Scope* scope) {
   scope->SetValue("data_deps", Value(nullptr, Value::LIST), nullptr);
   scope->SetValue("inputs", Value(nullptr, Value::LIST), nullptr);
   scope->SetValue("data", Value(nullptr, Value::LIST), nullptr);
+  scope->SetValue("defines", Value(nullptr, Value::LIST), nullptr);
 }
 
 }  // namespace functions
