@@ -8,7 +8,8 @@
     "build": "node scripts/build.js",
     "update_patches": "node scripts/updatePatches.js",
     "apply_patches": "node scripts/applyPatches.js",
-    "format": "node scripts/format.js"
+    "format": "node scripts/format.js",
+    "deploy": "node scripts/deploy.js"
   },
   "license": "BSD-3-Clause"
 }
