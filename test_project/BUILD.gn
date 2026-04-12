@@ -109,6 +109,31 @@ source_set("disabled_target") {
 # }
 
 # =============================================================================
+# TEST 8: disable_file
+# =============================================================================
+# disable_file prevents a BUILD.gn from being loaded at all.
+# The file at //disabled_dir/BUILD.gn contains assert(false), which would
+# fail if parsed.
+#
+# To test disable_file:
+# 1. Comment out the disable_file line below
+# 2. Uncomment the group("disable_file_test") that depends on disabled_dir
+# 3. Run: ./out/gn gen test_project/out --root=test_project
+# 4. Observe the assert(false) error from //disabled_dir/BUILD.gn
+# 5. Uncomment disable_file and run again - build succeeds (target not found)
+#
+# Note: When a file is disabled, its targets don't exist, so dependencies
+# on them will fail with "unknown target" - this is expected behavior.
+
+# Uncomment to prevent //disabled_dir/BUILD.gn from being parsed:
+# disable_file("//disabled_dir/BUILD.gn")
+
+# Uncomment to trigger loading of //disabled_dir/BUILD.gn:
+# group("disable_file_test") {
+#   deps = [ "//disabled_dir:should_not_exist" ]
+# }
+
+# =============================================================================
 # Aliases for backward compatibility with old test names
 # =============================================================================
 group("my_target") {
