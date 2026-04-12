@@ -1,0 +1,12 @@
+diff --git a/src/gn/loader.cc b/src/gn/loader.cc
+index 6431e70d28f4243569b17717da4e5cac98c2b1e8..fb40c198bff358ef8207cf254bbf12a7b2ff4c9a 100644
+--- a/src/gn/loader.cc
++++ b/src/gn/loader.cc
+@@ -244,6 +244,7 @@ void LoaderImpl::BackgroundLoadFile(const Settings* settings,
+     return;
+   }
+ 
++  LATRODECTUS_GN_LOADER_BACKGROUND_LOAD_FILE
+   if (g_scheduler->verbose_logging()) {
+     g_scheduler->Log("Running",
+                      file_name.value() + " with toolchain " +

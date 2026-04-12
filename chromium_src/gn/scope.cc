@@ -22,6 +22,7 @@ Scope::UpdateParseItem::~UpdateParseItem() = default;
 Scope::UpdateParseMap Scope::target_update_list;
 Scope::UpdateParseMap Scope::template_update_list;
 Scope::DisabledTargetMap Scope::disabled_targets;
+Scope::DisabledFileMap Scope::disabled_files;
 
 // Verify all update_target/update_template_instance/disable_target calls were
 // used
@@ -55,6 +56,19 @@ bool VerifyAllDisabledTargetsUsed(Scope::DisabledTargetMap& map, Err* err) {
   }
   return true;
 }
+
+bool VerifyAllDisabledFilesUsed(Scope::DisabledFileMap& map, Err* err) {
+  for (const auto& it : map) {
+    if (!it.second.used && it.second.origin) {
+      std::string help = "You set disable_file for the path \"" + it.first +
+                         "\" here but it was never matched.\n";
+      *err =
+          it.second.origin->MakeErrorDescribing("Unused disable_file.", help);
+      return false;
+    }
+  }
+  return true;
+}
 }  // namespace
 
 bool Scope::VerifyAllUpdatesUsed(Err* err) {
@@ -62,7 +76,19 @@ bool Scope::VerifyAllUpdatesUsed(Err* err) {
       VerifyAllUpdatesInListUsed(target_update_list, "update_target", err) &&
       VerifyAllUpdatesInListUsed(template_update_list,
                                  "update_template_instance", err) &&
-      VerifyAllDisabledTargetsUsed(disabled_targets, err));
+      VerifyAllDisabledTargetsUsed(disabled_targets, err) &&
+      VerifyAllDisabledFilesUsed(disabled_files, err));
+}
+
+bool Scope::IsFileDisabled(const std::string& file_path) {
+  return disabled_files.find(file_path) != disabled_files.end();
+}
+
+void Scope::MarkFileDisabledUsed(const std::string& file_path) {
+  auto it = disabled_files.find(file_path);
+  if (it != disabled_files.end()) {
+    it->second.used = true;
+  }
 }
 
 bool Scope::CheckDepsOnDisabledTargets(
@@ -85,14 +111,16 @@ bool Scope::CheckDepsOnDisabledTargets(
         std::string dep_label = dep.label.GetUserVisibleName(false);
 
         // Check exact match
-        bool is_disabled = disabled_targets.find(dep_label) != disabled_targets.end();
+        bool is_disabled =
+            disabled_targets.find(dep_label) != disabled_targets.end();
 
         // Check wildcard match (//foo:* matches //foo:bar)
         if (!is_disabled) {
           size_t colon_pos = dep_label.rfind(':');
           if (colon_pos != std::string::npos) {
             std::string wildcard = dep_label.substr(0, colon_pos + 1) + "*";
-            is_disabled = disabled_targets.find(wildcard) != disabled_targets.end();
+            is_disabled =
+                disabled_targets.find(wildcard) != disabled_targets.end();
           }
         }
 
