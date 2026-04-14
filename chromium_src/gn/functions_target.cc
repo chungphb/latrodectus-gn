@@ -1,3 +1,5 @@
+#include "gn/scope_per_file_provider.h"
+
 // Hook in ExecuteGenericTarget() after block execution.
 // First checks if target is disabled, then applies any pending updates.
 #define LATRODECTUS_GN_FUNCTIONS_TARGET_EXECUTE_GENERIC_TARGET                  \
@@ -161,7 +163,10 @@ bool UpdateTheTarget(Scope* scope,
     }
 
     // Execute the update block in BLOCK SCOPE.
+    // Add ScopePerFileProvider to provide built-in variables like root_gen_dir
+    // that were available during import but whose provider was destroyed.
     Scope block_scope(&extra_scope);
+    ScopePerFileProvider per_file_provider(&block_scope, true);
     update.first->Execute(&block_scope, err);
     if (err->has_error()) {
       return false;
@@ -289,7 +294,10 @@ bool UpdateTheTemplate(Scope* scope,
     }
 
     // Execute the update block in BLOCK SCOPE.
+    // Add ScopePerFileProvider to provide built-in variables like root_gen_dir
+    // that were available during import but whose provider was destroyed.
     Scope block_scope(&extra_scope);
+    ScopePerFileProvider per_file_provider(&block_scope, true);
     update.first->Execute(&block_scope, err);
     if (err->has_error()) {
       return false;
