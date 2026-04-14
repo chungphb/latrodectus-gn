@@ -13,6 +13,18 @@ source_set("helper") {
 group("config_dep") {}
 
 # =============================================================================
+# TEST 0: Label normalization
+# =============================================================================
+# Tests that "//normalize_test" is normalized to "//normalize_test:normalize_test"
+
+update_target("//normalize_test") {
+  sources += [ "normalized.cc" ]
+  deps += [ ":helper" ]
+}
+
+disable_target("//normalize_test:disabled")
+
+# =============================================================================
 # TEST 1: Basic update_target
 # =============================================================================
 # The update is registered BEFORE the target is defined.
@@ -167,4 +179,9 @@ group("my_target") {
 
 group("templated") {
   deps = [ ":from_template" ]
+}
+
+# Include normalize_test targets
+group("normalize_test_group") {
+  deps = [ "//normalize_test:normalize_test" ]
 }
