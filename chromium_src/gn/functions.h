@@ -56,6 +56,20 @@ bool IsTargetDisabled(Scope* scope,
 
 void ClearTargetScope(Scope* scope);
 
+// disable_template_instance
+extern const char kDisableTemplateInstance[];
+extern const char kDisableTemplateInstance_HelpShort[];
+extern const char kDisableTemplateInstance_Help[];
+
+Value RunDisableTemplateInstance(Scope* scope,
+                                 const FunctionCallNode* function,
+                                 const std::vector<Value>& args,
+                                 Err* err);
+
+bool IsTemplateInstanceDisabled(Scope* scope,
+                                const FunctionCallNode* function,
+                                const std::vector<Value>& args);
+
 // disable_file
 extern const char kDisableFile[];
 extern const char kDisableFile_HelpShort[];
