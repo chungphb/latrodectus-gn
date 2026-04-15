@@ -9,7 +9,10 @@
     "update_patches": "node scripts/updatePatches.js",
     "apply_patches": "node scripts/applyPatches.js",
     "format": "node scripts/format.js",
-    "deploy": "node scripts/deploy.js"
+    "deploy": "node scripts/deploy.js",
+    "test": "python3 tests/run_tests.py",
+    "test:verbose": "python3 tests/run_tests.py -v",
+    "test:case": "python3 tests/run_tests.py -v"
   },
   "license": "BSD-3-Clause"
 }
