@@ -116,6 +116,28 @@ source_set("disabled_target") {
 # }
 
 # =============================================================================
+# TEST 6b: disable_template_instance
+# =============================================================================
+# Disables a template instantiation, creating an empty placeholder target.
+
+disable_template_instance("//:disabled_template_target")
+
+my_template("disabled_template_target") {
+  deps = [ ":helper" ]
+}
+# Result: Empty placeholder group target (template body skipped)
+
+# =============================================================================
+# TEST 6c: Error for deps on disabled template instance
+# =============================================================================
+# Uncommenting this target causes gn gen to fail with an error because it
+# depends on a disabled template instance.
+
+# group("uses_disabled_template") {
+#   deps = [ ":disabled_template_target" ]
+# }
+
+# =============================================================================
 # TEST 7: Wildcard disable_target
 # =============================================================================
 # disable_target("//subdir:*") disables all targets in //subdir/BUILD.gn
