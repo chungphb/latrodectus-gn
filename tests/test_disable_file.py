@@ -8,8 +8,8 @@ from gn_test_base import GnTestCase
 class DisableFileBasicTest(GnTestCase):
     """Basic disable_file tests."""
 
-    def test_disable_file_prevents_loading(self):
-        """disable_file prevents a BUILD.gn from being loaded."""
+    def test_skips_file_parsing(self):
+        """disable_file skips parsing of the BUILD.gn file."""
         self.write_file('BUILD.gn', dedent('''
             import("//updates.gni")
             group("main") {
@@ -32,8 +32,8 @@ class DisableFileBasicTest(GnTestCase):
         # Should succeed because disabled_dir/BUILD.gn is never parsed
         self.assertGnGenSucceeds()
 
-    def test_disabled_file_targets_not_available(self):
-        """Targets in disabled files are not available for deps."""
+    def test_depends_on_target_in_disabled_file(self):
+        """Depending on a target in a disabled file fails."""
         self.write_file('BUILD.gn', dedent('''
             import("//updates.gni")
             group("main") {
@@ -52,13 +52,28 @@ class DisableFileBasicTest(GnTestCase):
         '''))
 
         # Should fail because the target doesn't exist (file is disabled)
-        self.assertGnGenFails()
+        self.assertGnGenFails("Unresolved dependencies")
+
+    def test_nonexistent_file(self):
+        """disable_file on nonexistent file succeeds silently."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            group("main") {
+              deps = []
+            }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            disable_file("//nonexistent/BUILD.gn")
+        '''))
+
+        self.assertGnGenSucceeds()
 
 
 class DisableFileMultipleTest(GnTestCase):
     """Tests for disabling multiple files."""
 
-    def test_disable_multiple_files(self):
+    def test_multiple_files(self):
         """Can disable multiple files."""
         self.write_file('BUILD.gn', dedent('''
             import("//updates.gni")

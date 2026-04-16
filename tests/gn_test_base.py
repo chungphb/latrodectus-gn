@@ -17,6 +17,7 @@ class GnTestCase(unittest.TestCase):
 
     GN_BINARY = None  # Set by runner or auto-detected
     SHOW_NINJA = False  # Set by runner
+    SHOW_GN_OUTPUT = False  # Set by runner
 
     def setUp(self):
         """Create temp directory with minimal GN project for each test."""
@@ -120,6 +121,15 @@ toolchain("default") {
 
         result = subprocess.run(cmd, capture_output=True, text=True)
         success = result.returncode == 0
+
+        if self.SHOW_GN_OUTPUT:
+            print(f"\ngn gen output\n{self.SEPARATOR}")
+            print(f"Command: {' '.join(cmd)}")
+            print(f"Return code: {result.returncode}")
+            if result.stdout:
+                print(f"STDOUT:\n{result.stdout}")
+            if result.stderr:
+                print(f"STDERR:\n{result.stderr}")
 
         if expect_success and not success:
             self.fail(f"gn gen failed:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}")

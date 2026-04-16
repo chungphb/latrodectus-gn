@@ -6,7 +6,7 @@
 // When disabled, creates a placeholder group target so that dependencies on
 // the disabled instance can be detected by
 // CheckDepsOnDisabledTemplateInstances.
-#define LATRODECTUS_GN_TEMPLATE_INVOKE                                             \
+#define LATRODECTUS_GN_TEMPLATE_INVOKE                                              \
   if (functions::IsTemplateInstanceDisabled(scope, invocation, args)) {        \
     Scope placeholder_scope(scope);                                            \
     placeholder_scope.SetValue("deps", Value(nullptr, Value::LIST), nullptr);  \
