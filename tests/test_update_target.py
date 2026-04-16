@@ -208,28 +208,32 @@ class UpdateTargetLabelNormalizationTest(GnTestCase):
     """Tests for label normalization in update_target."""
 
     def test_label_without_target_name_normalized(self):
-        """//foo is normalized to //foo:foo."""
+        """//dir is normalized to //dir:dir (default target)."""
         self.write_file('BUILD.gn', dedent('''
             import("//updates.gni")
             group("all") {
-              deps = ["//subdir"]
+              deps = ["//subdir", "//subdir:other"]
             }
         '''))
 
         self.write_file('subdir/BUILD.gn', dedent('''
             source_set("subdir") {
-              sources = ["original.cc"]
+              sources = ["default.cc"]
+            }
+            source_set("other") {
+              sources = ["other.cc"]
             }
         '''))
 
         self.write_file('updates.gni', dedent('''
-            update_target("//subdir:subdir") {
+            update_target("//subdir") {
               sources += ["normalized.cc"]
             }
         '''))
 
         self.assertGnGenSucceeds()
         self.assertNinjaContains('subdir/subdir.ninja', 'normalized.cc')
+        self.assertNinjaNotContains('subdir/other.ninja', 'normalized.cc')
 
 
 class UpdateTemplateInstanceTest(GnTestCase):

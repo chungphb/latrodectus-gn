@@ -67,8 +67,18 @@ toolchain("default") {
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
 
+    SEPARATOR = '----------------------------------------'
+
     def _print_ninja_files(self):
-        """Print all ninja files in out/obj/."""
+        """Print all ninja files in out/ and out/obj/."""
+        # Print main build.ninja
+        build_ninja = os.path.join(self.out_dir, 'build.ninja')
+        if os.path.exists(build_ninja):
+            print(f"\nbuild.ninja\n{self.SEPARATOR}")
+            with open(build_ninja) as fp:
+                print(fp.read())
+
+        # Print target ninja files
         obj_dir = os.path.join(self.out_dir, 'obj')
         if not os.path.exists(obj_dir):
             return
@@ -77,7 +87,7 @@ toolchain("default") {
                 if f.endswith('.ninja'):
                     path = os.path.join(root, f)
                     rel_path = os.path.relpath(path, obj_dir)
-                    print(f"\n  === {rel_path} ===")
+                    print(f"\n{rel_path}\n{self.SEPARATOR}")
                     with open(path) as fp:
                         print(fp.read())
 

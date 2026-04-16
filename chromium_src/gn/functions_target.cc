@@ -59,7 +59,7 @@ std::string NormalizeLabelForScope(Scope* scope,
     // No colon - add implicit target name from last path component
     // e.g., "//foo/bar" -> "//foo/bar:bar"
     size_t last_slash = input.rfind('/');
-    if (last_slash != std::string::npos && last_slash >= 2) {
+    if (last_slash != std::string::npos && last_slash >= 1) {
       std::string dir_name = input.substr(last_slash + 1);
       return input + ":" + dir_name;
     }
