@@ -44,6 +44,23 @@ class DisableTargetBasicTest(GnTestCase):
         self.assertGnGenSucceeds()
         self.assertNinjaNotContains('disabled.ninja', 'helper')
 
+    def test_removes_defines(self):
+        """disable_target makes target have no defines."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            source_set("disabled") {
+              sources = ["main.cc"]
+              defines = ["SHOULD_NOT_EXIST=1"]
+            }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            disable_target("//:disabled")
+        '''))
+
+        self.assertGnGenSucceeds()
+        self.assertNinjaNotContains('disabled.ninja', 'SHOULD_NOT_EXIST')
+
     def test_nonexistent_target(self):
         """disable_target on nonexistent target succeeds silently."""
         self.write_file('BUILD.gn', dedent('''

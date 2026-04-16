@@ -409,6 +409,10 @@ bool IsTargetDisabled(Scope* scope,
 }
 
 // Clears common target variables from the scope, making it an empty target.
+// TODO(chungphb): Consider simplifying this by generating a group target
+// instead (like disable_template_instance does), rather than explicitly
+// clearing each variable. This would be more maintainable as we wouldn't need
+// to track which variables to clear.
 void ClearTargetScope(Scope* scope) {
   scope->SetValue("sources", Value(nullptr, Value::LIST), nullptr);
   scope->SetValue("deps", Value(nullptr, Value::LIST), nullptr);

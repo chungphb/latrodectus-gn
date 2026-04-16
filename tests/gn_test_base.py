@@ -44,7 +44,7 @@ toolchain("default") {
     description = "COPY {{source}} {{output}}"
   }
   tool("cxx") {
-    command = "c++ -c {{source}} -o {{output}}"
+    command = "c++ {{defines}} -c {{source}} -o {{output}}"
     description = "CXX {{source}}"
     outputs = ["{{source_out_dir}}/{{label_name}}.{{source_name_part}}.o"]
   }

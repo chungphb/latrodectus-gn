@@ -396,3 +396,95 @@ class UpdateTargetInputValidationTest(GnTestCase):
 
         # GN warns about unused update_target but succeeds
         self.assertGnGenSucceedsWithWarning("update_target")
+
+
+class UpdateTargetRegistrationContextTest(GnTestCase):
+    """Tests for registration context variable access in update_target."""
+
+    def test_accesses_imported_variables(self):
+        """update_target block can access variables from imports at registration time."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            group("helper") {}
+            group("target") {
+              deps = []
+            }
+        '''))
+
+        self.write_file('config.gni', dedent('''
+            feature_enabled = true
+            extra_dep = ":helper"
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            import("//config.gni")
+            update_target("//:target") {
+              if (feature_enabled) {
+                deps += [extra_dep]
+              }
+            }
+        '''))
+
+        self.assertGnGenSucceeds()
+        build_ninja = self.read_build_ninja()
+        self.assertIn('helper', build_ninja)
+
+    def test_accesses_builtin_variables(self):
+        """update_target block can access built-in variables like root_gen_dir."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            group("target") {}
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_target("//:target") {
+              # Use built-in variables - test passes if this doesn't error
+              assert(root_gen_dir != "", "root_gen_dir should be available")
+              assert(current_toolchain != "", "current_toolchain should be available")
+              assert(root_build_dir != "", "root_build_dir should be available")
+            }
+        '''))
+
+        self.assertGnGenSucceeds()
+
+
+class UpdateTargetDefinesTest(GnTestCase):
+    """Tests for defines attribute in update_target."""
+
+    def test_adds_defines(self):
+        """update_target can add defines to a target."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            source_set("target") {
+              sources = ["main.cc"]
+            }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_target("//:target") {
+              defines = ["UPDATED=1"]
+            }
+        '''))
+
+        self.assertGnGenSucceeds()
+        self.assertNinjaContains('target.ninja', 'UPDATED=1')
+
+    def test_appends_defines(self):
+        """update_target can append to existing defines."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            source_set("target") {
+              sources = ["main.cc"]
+              defines = ["ORIGINAL=1"]
+            }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_target("//:target") {
+              defines += ["ADDED=1"]
+            }
+        '''))
+
+        self.assertGnGenSucceeds()
+        self.assertNinjaContains('target.ninja', 'ORIGINAL=1')
+        self.assertNinjaContains('target.ninja', 'ADDED=1')

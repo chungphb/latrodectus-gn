@@ -59,6 +59,30 @@ class DisableTemplateInstanceBasicTest(GnTestCase):
         self.assertGnGenSucceeds()
         self.assertNinjaNotContains('disabled.ninja', 'helper')
 
+    def test_removes_defines(self):
+        """disable_template_instance makes template instance have no defines."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+
+            template("my_template") {
+              source_set(target_name) {
+                forward_variables_from(invoker, "*")
+              }
+            }
+
+            my_template("disabled") {
+              sources = ["main.cc"]
+              defines = ["SHOULD_NOT_EXIST=1"]
+            }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            disable_template_instance("//:disabled")
+        '''))
+
+        self.assertGnGenSucceeds()
+        self.assertNinjaNotContains('disabled.ninja', 'SHOULD_NOT_EXIST')
+
     def test_nonexistent_template_instance(self):
         """disable_template_instance on nonexistent target succeeds silently."""
         self.write_file('BUILD.gn', dedent('''

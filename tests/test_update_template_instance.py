@@ -316,3 +316,59 @@ class UpdateTemplateInstanceInvokerTest(GnTestCase):
         # When testonly=true, the ninja file will contain "testonly" pool reference
         content = self.read_ninja_file('bool_test.ninja')
         self.assertIsNotNone(content)
+
+
+class UpdateTemplateInstanceDefinesTest(GnTestCase):
+    """Tests for defines attribute in update_template_instance."""
+
+    def test_adds_defines(self):
+        """update_template_instance can add defines to a template instance."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+
+            template("my_template") {
+              source_set(target_name) {
+                forward_variables_from(invoker, "*")
+              }
+            }
+
+            my_template("target") {
+              sources = ["main.cc"]
+            }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_template_instance("//:target") {
+              defines = ["UPDATED=1"]
+            }
+        '''))
+
+        self.assertGnGenSucceeds()
+        self.assertNinjaContains('target.ninja', 'UPDATED=1')
+
+    def test_appends_defines(self):
+        """update_template_instance can append to existing defines."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+
+            template("my_template") {
+              source_set(target_name) {
+                forward_variables_from(invoker, "*")
+              }
+            }
+
+            my_template("target") {
+              sources = ["main.cc"]
+              defines = ["ORIGINAL=1"]
+            }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_template_instance("//:target") {
+              defines += ["ADDED=1"]
+            }
+        '''))
+
+        self.assertGnGenSucceeds()
+        self.assertNinjaContains('target.ninja', 'ORIGINAL=1')
+        self.assertNinjaContains('target.ninja', 'ADDED=1')
