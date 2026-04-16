@@ -1,5 +1,0 @@
-# Test config file for update_target registration context test
-# This simulates //latrodectus/build/config.gni in the real project
-
-test_feature_enabled = true
-test_extra_dep = ":config_dep"
