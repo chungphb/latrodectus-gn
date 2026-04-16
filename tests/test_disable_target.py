@@ -150,6 +150,23 @@ class DisableTargetBasicTest(GnTestCase):
 class DisableTargetLabelNormalizationTest(GnTestCase):
     """Tests for label normalization in disable_target."""
 
+    def test_short_label_normalized(self):
+        """Short label like 'target' normalizes to //:target."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            source_set("target") {
+              sources = ["a.cc"]
+            }
+            group("main") { deps = [] }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            disable_target("target")
+        '''))
+
+        self.assertGnGenSucceeds()
+        self.assertNinjaNotContains('target.ninja', 'a.cc')
+
     def test_default_target_name(self):
         """//subdir normalizes to //subdir:subdir."""
         self.write_file('BUILD.gn', dedent('''
@@ -175,6 +192,66 @@ class DisableTargetLabelNormalizationTest(GnTestCase):
         self.assertGnGenSucceeds()
         self.assertNinjaNotContains('subdir/subdir.ninja', 'a.cc')
         self.assertNinjaContains('subdir/other.ninja', 'b.cc')
+
+
+class DisableTargetInputValidationTest(GnTestCase):
+    """Tests for disable_target input validation (permissive behavior)."""
+
+    def test_single_slash_normalized(self):
+        """/target normalizes to //:/target (succeeds with warning)."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            group("main") { deps = [] }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            disable_target("/target")
+        '''))
+
+        # GN normalizes /target to //:/target and succeeds (with warning about unused)
+        self.assertGnGenSucceedsWithWarning("disable_target")
+
+    def test_double_colon_accepted(self):
+        """Labels with multiple colons are accepted as-is."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            group("main") { deps = [] }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            disable_target("//target:sub1:sub2")
+        '''))
+
+        # GN accepts this malformed label and succeeds (with warning)
+        self.assertGnGenSucceedsWithWarning("disable_target")
+
+    def test_double_slashes_in_path(self):
+        """Multiple // in path get normalized."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            group("main") { deps = [] }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            disable_target("//target//sub1//sub2")
+        '''))
+
+        # GN normalizes //target//sub1//sub2 to //target//sub1//sub2:sub2 and succeeds (with warning)
+        self.assertGnGenSucceedsWithWarning("disable_target")
+
+    def test_empty_string_normalized(self):
+        """Empty string normalizes to //:."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            group("main") { deps = [] }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            disable_target("")
+        '''))
+
+        # GN normalizes "" to //: and succeeds (with warning)
+        self.assertGnGenSucceedsWithWarning("disable_target")
 
 
 class DisableTargetWildcardTest(GnTestCase):

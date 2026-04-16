@@ -266,6 +266,25 @@ class UpdateTargetMultipleTest(GnTestCase):
 class UpdateTargetLabelNormalizationTest(GnTestCase):
     """Tests for label normalization in update_target."""
 
+    def test_short_label_normalized(self):
+        """Short label like 'target' normalizes to //:target."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            source_set("target") {
+              sources = ["original.cc"]
+            }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_target("target") {
+              sources += ["added.cc"]
+            }
+        '''))
+
+        self.assertGnGenSucceeds()
+        self.assertNinjaContains('target.ninja', 'original.cc')
+        self.assertNinjaContains('target.ninja', 'added.cc')
+
     def test_default_target_name(self):
         """//dir is normalized to //dir:dir (default target)."""
         self.write_file('BUILD.gn', dedent('''
@@ -293,3 +312,87 @@ class UpdateTargetLabelNormalizationTest(GnTestCase):
         self.assertGnGenSucceeds()
         self.assertNinjaContains('subdir/subdir.ninja', 'normalized.cc')
         self.assertNinjaNotContains('subdir/other.ninja', 'normalized.cc')
+
+
+class UpdateTargetInputValidationTest(GnTestCase):
+    """Tests for update_target input validation (permissive behavior)."""
+
+    def test_single_slash_normalized(self):
+        """/target normalizes to //:/target (succeeds with warning)."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            group("main") { deps = [] }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_target("/target") {
+              sources = []
+            }
+        '''))
+
+        # GN normalizes /target to //:/target and succeeds (with warning about unused)
+        self.assertGnGenSucceedsWithWarning("update_target")
+
+    def test_double_colon_accepted(self):
+        """Labels with multiple colons are accepted as-is."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            group("main") { deps = [] }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_target("//target:sub1:sub2") {
+              sources = []
+            }
+        '''))
+
+        # GN accepts this malformed label and succeeds (with warning)
+        self.assertGnGenSucceedsWithWarning("update_target")
+
+    def test_double_slashes_in_path(self):
+        """Multiple // in path get normalized."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            group("main") { deps = [] }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_target("//target//sub1//sub2") {
+              sources = []
+            }
+        '''))
+
+        # GN normalizes and succeeds (with warning)
+        self.assertGnGenSucceedsWithWarning("update_target")
+
+    def test_empty_string_normalized(self):
+        """Empty string normalizes to //:."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            group("main") { deps = [] }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_target("") {
+              sources = []
+            }
+        '''))
+
+        # GN normalizes "" to //: and succeeds (with warning)
+        self.assertGnGenSucceedsWithWarning("update_target")
+
+    def test_nonexistent_target(self):
+        """update_target on nonexistent target succeeds with warning."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            group("main") { deps = [] }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_target("//:nonexistent") {
+              sources += ["added.cc"]
+            }
+        '''))
+
+        # GN warns about unused update_target but succeeds
+        self.assertGnGenSucceedsWithWarning("update_target")

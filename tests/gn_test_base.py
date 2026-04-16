@@ -197,3 +197,12 @@ toolchain("default") {
         success, stdout, stderr = self.run_gn_gen(expect_success=True)
         self.assertTrue(success, f"Expected gn gen to succeed but it failed:\n{stderr}")
         return stdout, stderr
+
+    def assertGnGenSucceedsWithWarning(self, warning_substring):
+        """Assert that gn gen succeeds but emits a specific warning."""
+        success, stdout, stderr = self.run_gn_gen(expect_success=True)
+        self.assertTrue(success, f"Expected gn gen to succeed but it failed:\n{stderr}")
+        combined = stdout + stderr
+        self.assertIn(warning_substring, combined,
+            f"Expected warning containing '{warning_substring}', got:\n{combined}")
+        return stdout, stderr

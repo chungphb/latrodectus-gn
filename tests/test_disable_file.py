@@ -70,6 +70,36 @@ class DisableFileBasicTest(GnTestCase):
         self.assertGnGenSucceeds()
 
 
+class DisableFileInputValidationTest(GnTestCase):
+    """Tests for disable_file input validation."""
+
+    def test_missing_path_prefix(self):
+        """disable_file without // prefix fails with clear error."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            group("main") { deps = [] }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            disable_file("not_a_path")
+        '''))
+
+        self.assertGnGenFails("disable_file requires a full path starting with //")
+
+    def test_relative_path(self):
+        """disable_file with relative path fails."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            group("main") { deps = [] }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            disable_file("subdir/BUILD.gn")
+        '''))
+
+        self.assertGnGenFails("disable_file requires a full path starting with //")
+
+
 class DisableFileMultipleTest(GnTestCase):
     """Tests for disabling multiple files."""
 
