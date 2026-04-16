@@ -16,6 +16,7 @@ class GnTestCase(unittest.TestCase):
     """
 
     GN_BINARY = None  # Set by runner or auto-detected
+    SHOW_NINJA = False  # Set by runner
 
     def setUp(self):
         """Create temp directory with minimal GN project for each test."""
@@ -60,9 +61,25 @@ toolchain("default") {
 ''')
 
     def tearDown(self):
-        """Clean up temp directory."""
+        """Clean up temp directory, optionally showing ninja files first."""
+        if self.SHOW_NINJA:
+            self._print_ninja_files()
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
+
+    def _print_ninja_files(self):
+        """Print all ninja files in out/obj/."""
+        obj_dir = os.path.join(self.out_dir, 'obj')
+        if not os.path.exists(obj_dir):
+            return
+        for root, dirs, files in os.walk(obj_dir):
+            for f in files:
+                if f.endswith('.ninja'):
+                    path = os.path.join(root, f)
+                    rel_path = os.path.relpath(path, obj_dir)
+                    print(f"\n  === {rel_path} ===")
+                    with open(path) as fp:
+                        print(fp.read())
 
     # ========== File Helpers ==========
 

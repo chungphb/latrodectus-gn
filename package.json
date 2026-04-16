@@ -12,7 +12,8 @@
     "deploy": "node scripts/deploy.js",
     "test": "python3 tests/run_tests.py",
     "test:verbose": "python3 tests/run_tests.py -v",
-    "test:case": "python3 tests/run_tests.py -v"
+    "test:case": "python3 tests/run_tests.py -v",
+    "test:debug": "python3 tests/run_tests.py -v --show-ninja"
   },
   "license": "BSD-3-Clause"
 }
