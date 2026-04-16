@@ -8,7 +8,7 @@ from gn_test_base import GnTestCase
 class UpdateTargetBasicTest(GnTestCase):
     """Basic update_target tests."""
 
-    def test_update_adds_sources(self):
+    def test_adds_sources(self):
         """update_target can add sources to a target."""
         self.write_file('BUILD.gn', dedent('''
             import("//updates.gni")
@@ -26,7 +26,7 @@ class UpdateTargetBasicTest(GnTestCase):
         self.assertGnGenSucceeds()
         self.assertNinjaContains('foo.ninja', 'extra.cc')
 
-    def test_update_appends_to_existing(self):
+    def test_appends_to_existing(self):
         """update_target += reads and appends to existing values."""
         self.write_file('BUILD.gn', dedent('''
             import("//updates.gni")
@@ -45,7 +45,7 @@ class UpdateTargetBasicTest(GnTestCase):
         self.assertNinjaContains('append.ninja', 'original.cc')
         self.assertNinjaContains('append.ninja', 'added.cc')
 
-    def test_update_adds_deps(self):
+    def test_adds_deps(self):
         """update_target can add deps to a target."""
         self.write_file('BUILD.gn', dedent('''
             import("//updates.gni")
@@ -69,7 +69,7 @@ class UpdateTargetBasicTest(GnTestCase):
         self.assertIn('main', build_ninja)
         self.assertIn('helper', build_ninja)
 
-    def test_update_overrides_value(self):
+    def test_overrides_value(self):
         """update_target can completely override a value by clearing first."""
         self.write_file('BUILD.gn', dedent('''
             import("//updates.gni")
@@ -89,7 +89,7 @@ class UpdateTargetBasicTest(GnTestCase):
         self.assertNinjaNotContains('override.ninja', 'original.cc')
         self.assertNinjaContains('override.ninja', 'override.cc')
 
-    def test_update_removes_existing_source(self):
+    def test_removes_existing_source(self):
         """update_target -= removes an existing source."""
         self.write_file('BUILD.gn', dedent('''
             import("//updates.gni")
@@ -108,7 +108,7 @@ class UpdateTargetBasicTest(GnTestCase):
         self.assertNinjaContains('remove.ninja', 'keep.cc')
         self.assertNinjaNotContains('remove.ninja', 'remove_me.cc')
 
-    def test_update_removes_nonexistent_source_fails(self):
+    def test_removes_nonexistent_source_fails(self):
         """update_target -= on nonexistent item causes error."""
         self.write_file('BUILD.gn', dedent('''
             import("//updates.gni")
@@ -125,11 +125,70 @@ class UpdateTargetBasicTest(GnTestCase):
 
         self.assertGnGenFails("Item not found")
 
+    def test_accesses_target_local_variables(self):
+        """update_target block can read variables defined in the target."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            source_set("with_var") {
+              my_prefix = "prefix_"
+              sources = ["${my_prefix}original.cc"]
+            }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_target("//:with_var") {
+              sources += ["${my_prefix}added.cc"]
+            }
+        '''))
+
+        self.assertGnGenSucceeds()
+        self.assertNinjaContains('with_var.ninja', 'prefix_original.cc')
+        self.assertNinjaContains('with_var.ninja', 'prefix_added.cc')
+
+    def test_overrides_target_local_variables(self):
+        """update_target block can override variables defined in the target."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            source_set("override_var") {
+              my_prefix = "old_"
+              sources = ["${my_prefix}original.cc"]
+            }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_target("//:override_var") {
+              my_prefix = "new_"
+              sources += ["${my_prefix}added.cc"]
+            }
+        '''))
+
+        self.assertGnGenSucceeds()
+        self.assertNinjaContains('override_var.ninja', 'old_original.cc')
+        self.assertNinjaContains('override_var.ninja', 'new_added.cc')
+
+    def test_accesses_file_scope_variables(self):
+        """update_target block cannot read variables defined at file scope (only target scope)."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            file_prefix = "file_"
+            source_set("file_var") {
+              sources = ["${file_prefix}original.cc"]
+            }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_target("//:file_var") {
+              sources += ["${file_prefix}added.cc"]
+            }
+        '''))
+
+        self.assertGnGenFails("Undefined identifier")
+
 
 class UpdateTargetMultipleTest(GnTestCase):
     """Tests for multiple updates on same target."""
 
-    def test_multiple_updates_applied_in_order(self):
+    def test_multiple_adds(self):
         """Multiple updates on same target are applied in order."""
         self.write_file('BUILD.gn', dedent('''
             import("//updates.gni")
@@ -151,7 +210,7 @@ class UpdateTargetMultipleTest(GnTestCase):
         self.assertNinjaContains('multi.ninja', 'first.cc')
         self.assertNinjaContains('multi.ninja', 'second.cc')
 
-    def test_multiple_update_blocks_override_sources_last_wins(self):
+    def test_multiple_overrides(self):
         """Multiple update_target blocks overriding sources, last one wins."""
         self.write_file('BUILD.gn', dedent('''
             import("//updates.gni")
@@ -176,7 +235,7 @@ class UpdateTargetMultipleTest(GnTestCase):
         self.assertNinjaNotContains('override_multi.ninja', 'first_override.cc')
         self.assertNinjaContains('override_multi.ninja', 'second_override.cc')
 
-    def test_multiple_update_blocks_subtract_sources_sequentially(self):
+    def test_multiple_removes(self):
         """Multiple update_target blocks each removing a source sequentially."""
         self.write_file('BUILD.gn', dedent('''
             import("//updates.gni")
@@ -207,7 +266,7 @@ class UpdateTargetMultipleTest(GnTestCase):
 class UpdateTargetLabelNormalizationTest(GnTestCase):
     """Tests for label normalization in update_target."""
 
-    def test_label_without_target_name_normalized(self):
+    def test_default_target_name(self):
         """//dir is normalized to //dir:dir (default target)."""
         self.write_file('BUILD.gn', dedent('''
             import("//updates.gni")
@@ -239,7 +298,7 @@ class UpdateTargetLabelNormalizationTest(GnTestCase):
 class UpdateTemplateInstanceTest(GnTestCase):
     """Tests for update_template_instance."""
 
-    def test_update_template_instance(self):
+    def test_adds(self):
         """update_template_instance modifies template-created targets."""
         self.write_file('BUILD.gn', dedent('''
             import("//updates.gni")
@@ -263,3 +322,275 @@ class UpdateTemplateInstanceTest(GnTestCase):
 
         self.assertGnGenSucceeds()
         self.assertNinjaContains('from_template.ninja', 'template_added.cc')
+
+    def test_overrides(self):
+        """update_template_instance can override sources completely."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+
+            template("my_template") {
+              source_set(target_name) {
+                forward_variables_from(invoker, "*")
+              }
+            }
+
+            my_template("override_template") {
+              sources = ["original.cc"]
+            }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_template_instance("//:override_template") {
+              sources = []
+              sources = ["override.cc"]
+            }
+        '''))
+
+        self.assertGnGenSucceeds()
+        self.assertNinjaNotContains('override_template.ninja', 'original.cc')
+        self.assertNinjaContains('override_template.ninja', 'override.cc')
+
+    def test_removes(self):
+        """update_template_instance can remove sources with -=."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+
+            template("my_template") {
+              source_set(target_name) {
+                forward_variables_from(invoker, "*")
+              }
+            }
+
+            my_template("subtract_template") {
+              sources = ["keep.cc", "remove.cc"]
+            }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_template_instance("//:subtract_template") {
+              sources -= ["remove.cc"]
+            }
+        '''))
+
+        self.assertGnGenSucceeds()
+        self.assertNinjaContains('subtract_template.ninja', 'keep.cc')
+        self.assertNinjaNotContains('subtract_template.ninja', 'remove.cc')
+
+    def test_multiple_changes(self):
+        """Multiple update_template_instance blocks applied in order."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+
+            template("my_template") {
+              source_set(target_name) {
+                forward_variables_from(invoker, "*")
+              }
+            }
+
+            my_template("multi_template") {
+              sources = []
+            }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_template_instance("//:multi_template") {
+              sources += ["first.cc"]
+            }
+            update_template_instance("//:multi_template") {
+              sources += ["second.cc"]
+            }
+        '''))
+
+        self.assertGnGenSucceeds()
+        self.assertNinjaContains('multi_template.ninja', 'first.cc')
+        self.assertNinjaContains('multi_template.ninja', 'second.cc')
+
+    def test_accesses_local_variables(self):
+        """update_template_instance can access variables defined in template instance."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+
+            template("my_template") {
+              source_set(target_name) {
+                forward_variables_from(invoker, "*")
+              }
+            }
+
+            my_template("var_template") {
+              my_prefix = "prefix_"
+              sources = ["${my_prefix}original.cc"]
+            }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_template_instance("//:var_template") {
+              sources += ["${my_prefix}added.cc"]
+            }
+        '''))
+
+        self.assertGnGenSucceeds()
+        self.assertNinjaContains('var_template.ninja', 'prefix_original.cc')
+        self.assertNinjaContains('var_template.ninja', 'prefix_added.cc')
+
+    def test_accesses_file_scope_variables(self):
+        """update_template_instance cannot access file scope variables."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            file_prefix = "file_"
+
+            template("my_template") {
+              source_set(target_name) {
+                forward_variables_from(invoker, "*")
+              }
+            }
+
+            my_template("file_var_template") {
+              sources = ["${file_prefix}original.cc"]
+            }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_template_instance("//:file_var_template") {
+              sources += ["${file_prefix}added.cc"]
+            }
+        '''))
+
+        self.assertGnGenFails("Undefined identifier")
+
+    def test_accesses_invoker_params(self):
+        """update_template_instance can modify params read by template via invoker."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+
+            template("my_template") {
+              source_set(target_name) {
+                sources = invoker.my_sources + ["template_default.cc"]
+              }
+            }
+
+            my_template("invoker_template") {
+              my_sources = ["user.cc"]
+            }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_template_instance("//:invoker_template") {
+              my_sources += ["injected.cc"]
+            }
+        '''))
+
+        self.assertGnGenSucceeds()
+        self.assertNinjaContains('invoker_template.ninja', 'user.cc')
+        self.assertNinjaContains('invoker_template.ninja', 'injected.cc')
+        self.assertNinjaContains('invoker_template.ninja', 'template_default.cc')
+
+    def test_overrides_invoker_params(self):
+        """update_template_instance can override params read by template via invoker."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+
+            template("my_template") {
+              source_set(target_name) {
+                sources = invoker.my_sources + ["template_default.cc"]
+              }
+            }
+
+            my_template("invoker_override") {
+              my_sources = ["user.cc", "other.cc"]
+            }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_template_instance("//:invoker_override") {
+              my_sources = []
+              my_sources = ["replaced.cc"]
+            }
+        '''))
+
+        self.assertGnGenSucceeds()
+        self.assertNinjaNotContains('invoker_override.ninja', 'user.cc')
+        self.assertNinjaNotContains('invoker_override.ninja', 'other.cc')
+        self.assertNinjaContains('invoker_override.ninja', 'replaced.cc')
+        self.assertNinjaContains('invoker_override.ninja', 'template_default.cc')
+
+    def test_removes_invoker_params(self):
+        """update_template_instance can remove from params read by template via invoker."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+
+            template("my_template") {
+              source_set(target_name) {
+                sources = invoker.my_sources + ["template_default.cc"]
+              }
+            }
+
+            my_template("invoker_remove") {
+              my_sources = ["keep.cc", "remove.cc"]
+            }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_template_instance("//:invoker_remove") {
+              my_sources -= ["remove.cc"]
+            }
+        '''))
+
+        self.assertGnGenSucceeds()
+        self.assertNinjaContains('invoker_remove.ninja', 'keep.cc')
+        self.assertNinjaNotContains('invoker_remove.ninja', 'remove.cc')
+        self.assertNinjaContains('invoker_remove.ninja', 'template_default.cc')
+
+    def test_overrides_string_param(self):
+        """update_template_instance can override a string parameter."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+
+            template("my_template") {
+              source_set(target_name) {
+                output_name = invoker.my_output_name
+                sources = ["main.cc"]
+              }
+            }
+
+            my_template("string_test") {
+              my_output_name = "original_name"
+            }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_template_instance("//:string_test") {
+              my_output_name = "modified_name"
+            }
+        '''))
+
+        self.assertGnGenSucceeds()
+        self.assertNinjaContains('string_test.ninja', 'modified_name')
+        self.assertNinjaNotContains('string_test.ninja', 'original_name')
+
+    def test_overrides_bool_param(self):
+        """update_template_instance can override a boolean parameter."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+
+            template("my_template") {
+              source_set(target_name) {
+                testonly = invoker.is_test
+                sources = ["main.cc"]
+              }
+            }
+
+            my_template("bool_test") {
+              is_test = false
+            }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_template_instance("//:bool_test") {
+              is_test = true
+            }
+        '''))
+
+        self.assertGnGenSucceeds()
+        # When testonly=true, the ninja file will contain "testonly" pool reference
+        content = self.read_ninja_file('bool_test.ninja')
+        self.assertIsNotNone(content)
