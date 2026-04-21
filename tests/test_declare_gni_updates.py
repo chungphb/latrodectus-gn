@@ -428,3 +428,104 @@ class DeclareGniUpdatesNestedCallsTest(GnTestCase):
         '''))
 
         self.assertGnGenSucceeds()
+
+
+class DeclareGniUpdatesImportLoopTest(GnTestCase):
+    """Tests for import loop detection with declare_gni_updates."""
+
+    def test_import_loop_via_auto_import_detected(self):
+        """Import loop involving auto-imported updater is detected."""
+        # Scenario: declare_gni_updates auto-imports updates.gni before config.gni
+        # updates.gni imports config.gni, config.gni imports updates.gni -> loop
+        self.write_file('BUILD.gn', dedent('''
+            import("//config.gni")
+            group("main") {}
+        '''))
+
+        self.write_file('config.gni', dedent('''
+            import("//updates.gni")
+            value = "original"
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            import("//config.gni")
+            update_gni_file("//config.gni") {
+              value = "updated"
+            }
+        '''))
+
+        self.write_file('BUILDCONFIG.gn', dedent('''
+            declare_gni_updates("//updates.gni")
+            set_default_toolchain("//toolchain:default")
+        '''))
+
+        self.assertGnGenFails("import loop")
+
+    def test_chained_updater_importing_target_works(self):
+        """Updater importing another updater's target does not create loop."""
+        # Scenario:
+        # - another_updates.gni updates config.gni, imports updates.gni
+        # - updates.gni imports config.gni (another_updates's target)
+        # This should work because mapping is erased before auto-import
+        self.write_file('BUILD.gn', dedent('''
+            import("//config.gni")
+            assert(value == "updated", "value should be updated")
+            group("main") {}
+        '''))
+
+        self.write_file('config.gni', dedent('''
+            value = "original"
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            import("//config.gni")
+            # updates.gni imports config.gni which is another_updates's target
+        '''))
+
+        self.write_file('another_updates.gni', dedent('''
+            import("//updates.gni")
+            update_gni_file("//config.gni") {
+              value = "updated"
+            }
+        '''))
+
+        self.write_file('BUILDCONFIG.gn', dedent('''
+            declare_gni_updates("//another_updates.gni")
+            set_default_toolchain("//toolchain:default")
+        '''))
+
+        self.assertGnGenSucceeds()
+
+    def test_import_loop_when_importing_updater_directly(self):
+        """Loop detected when BUILD.gn imports updater that triggers auto-import chain."""
+        # Scenario:
+        # - BUILD.gn imports updates.gni directly
+        # - updates.gni imports config.gni
+        # - config.gni triggers auto-import of another_updates.gni
+        # - another_updates.gni imports updates.gni -> loop
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            group("main") {}
+        '''))
+
+        self.write_file('config.gni', dedent('''
+            value = "original"
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            import("//config.gni")
+        '''))
+
+        self.write_file('another_updates.gni', dedent('''
+            import("//updates.gni")
+            update_gni_file("//config.gni") {
+              value = "updated"
+            }
+        '''))
+
+        self.write_file('BUILDCONFIG.gn', dedent('''
+            declare_gni_updates("//another_updates.gni")
+            set_default_toolchain("//toolchain:default")
+        '''))
+
+        self.assertGnGenFails("import loop")
