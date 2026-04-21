@@ -1,4 +1,6 @@
+#include "gn/scheduler.h"
 #include "gn/scope_per_file_provider.h"
+#include "gn/settings.h"
 
 // Hook in ExecuteGenericTarget() after block execution.
 // First checks if target is disabled, then applies any pending updates.
@@ -648,6 +650,161 @@ Value RunDisableFile(Scope* scope,
 
   auto& disabled = Scope::GetDisabledFiles();
   disabled[file_path].origin = function;
+
+  return Value();
+}
+
+// declare_gni_updates
+// ---------------------------------------------------------------
+const char kDeclareGniUpdates[] = "declare_gni_updates";
+const char kDeclareGniUpdates_HelpShort[] =
+    "declare_gni_updates: Declare a .gni file containing update_gni_file "
+    "calls.";
+const char kDeclareGniUpdates_Help[] =
+    R"(declare_gni_updates: Declare a .gni file containing update_gni_file calls.
+
+  declare_gni_updates(updater_file_path)
+
+  Scans the specified .gni file for update_gni_file() calls and registers
+  a mapping so that when the target files are imported, the updater file
+  is automatically imported first.
+
+  This solves the ordering problem where update_gni_file() must be called
+  before the target file is imported. By declaring the updater file early
+  (e.g., in BUILDCONFIG.gn), the system ensures updates are applied
+  regardless of import order elsewhere.
+
+  The updater_file_path should be the full path starting with //
+  (e.g., "//latrodectus/gni_updates.gni").
+
+Example:
+  # In BUILDCONFIG.gn (runs early)
+  declare_gni_updates("//latrodectus/feature_updates.gni")
+
+  # feature_updates.gni contains:
+  update_gni_file("//build/config/features.gni") {
+    enable_feature = true
+  }
+
+  # Later, in any BUILD.gn:
+  import("//build/config/features.gni")  # Updates applied automatically!
+)";
+
+// Helper to extract update_gni_file target paths from a parsed file.
+// Walks the AST looking for function calls named "update_gni_file".
+namespace {
+void ExtractUpdateGniFileTargets(const ParseNode* node,
+                                 const std::string& updater_path,
+                                 std::vector<std::string>* targets) {
+  if (!node) {
+    return;
+  }
+
+  // Check if this is a function call to update_gni_file
+  if (const FunctionCallNode* func = node->AsFunctionCall()) {
+    if (func->function().value() == "update_gni_file") {
+      const auto& args = func->args()->contents();
+      if (!args.empty()) {
+        if (const LiteralNode* lit = args[0]->AsLiteral()) {
+          if (lit->value().type() == Token::STRING) {
+            // Extract the string value (remove quotes)
+            std::string_view sv = lit->value().value();
+            std::string target(sv);
+            if (target.size() >= 2 && target[0] == '"') {
+              target = target.substr(1, target.size() - 2);
+            }
+            targets->push_back(target);
+          }
+        }
+      }
+    }
+  }
+
+  // Recurse into child nodes
+  if (const BlockNode* block = node->AsBlock()) {
+    for (const auto& statement : block->statements()) {
+      ExtractUpdateGniFileTargets(statement.get(), updater_path, targets);
+    }
+    if (block->End()) {
+      ExtractUpdateGniFileTargets(block->End(), updater_path, targets);
+    }
+  } else if (const FunctionCallNode* func = node->AsFunctionCall()) {
+    if (func->args()) {
+      ExtractUpdateGniFileTargets(func->args(), updater_path, targets);
+    }
+    if (func->block()) {
+      ExtractUpdateGniFileTargets(func->block(), updater_path, targets);
+    }
+  } else if (const ListNode* list = node->AsList()) {
+    for (const auto& item : list->contents()) {
+      ExtractUpdateGniFileTargets(item.get(), updater_path, targets);
+    }
+  } else if (const ConditionNode* cond = node->AsCondition()) {
+    // Handle if/else blocks
+    if (cond->if_true()) {
+      ExtractUpdateGniFileTargets(cond->if_true(), updater_path, targets);
+    }
+    if (cond->if_false()) {
+      // if_false can be a BlockNode (else) or another ConditionNode (else if)
+      ExtractUpdateGniFileTargets(cond->if_false(), updater_path, targets);
+    }
+  }
+}
+}  // namespace
+
+// Scans the updater file for update_gni_file() calls and registers mappings.
+Value RunDeclareGniUpdates(Scope* scope,
+                           const FunctionCallNode* function,
+                           const std::vector<Value>& args,
+                           Err* err) {
+  if (args.size() != 1) {
+    *err = Err(function, "declare_gni_updates requires exactly one argument.");
+    return Value();
+  }
+
+  if (!args[0].VerifyTypeIs(Value::STRING, err)) {
+    return Value();
+  }
+
+  const std::string& updater_path = args[0].string_value();
+
+  // Validate the path starts with //
+  if (updater_path.size() < 2 || updater_path[0] != '/' ||
+      updater_path[1] != '/') {
+    *err = Err(args[0].origin(),
+               "declare_gni_updates requires a full path starting with //.",
+               "Got: \"" + updater_path + "\"");
+    return Value();
+  }
+
+  // Validate the file is a .gni file
+  if (updater_path.size() < 4 ||
+      updater_path.compare(updater_path.size() - 4, 4, ".gni") != 0) {
+    *err =
+        Err(args[0].origin(), "declare_gni_updates requires a .gni file path.",
+            "Got: \"" + updater_path + "\"");
+    return Value();
+  }
+
+  // Load and parse the updater file
+  SourceFile source_file(updater_path);
+  const ParseNode* node = g_scheduler->input_file_manager()->SyncLoadFile(
+      function->GetRange(), scope->settings()->build_settings(), source_file,
+      err);
+  if (!node) {
+    // File doesn't exist or parse error
+    return Value();
+  }
+
+  // Extract update_gni_file targets from the AST
+  std::vector<std::string> targets;
+  ExtractUpdateGniFileTargets(node, updater_path, &targets);
+
+  // Register mappings: target_file -> updater_file
+  auto& declared = Scope::GetDeclaredUpdaters();
+  for (const auto& target : targets) {
+    declared[target] = updater_path;
+  }
 
   return Value();
 }

@@ -91,6 +91,16 @@ Value RunUpdateGniFile(Scope* scope,
                        BlockNode* block,
                        Err* err);
 
+// declare_gni_updates
+extern const char kDeclareGniUpdates[];
+extern const char kDeclareGniUpdates_HelpShort[];
+extern const char kDeclareGniUpdates_Help[];
+
+Value RunDeclareGniUpdates(Scope* scope,
+                           const FunctionCallNode* function,
+                           const std::vector<Value>& args,
+                           Err* err);
+
 }  // namespace functions
 
 #endif  // LATRODECTUS_CHROMIUM_SRC_GN_FUNCTIONS_H_
