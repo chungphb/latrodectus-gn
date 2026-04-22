@@ -147,6 +147,38 @@ toolchain("default") {
 
         return success, result.stdout, result.stderr
 
+    def run_gn_check(self, label=None, check_generated=False, expect_success=True):
+        """Run gn check and return (success, stdout, stderr).
+
+        Args:
+            label: Optional label pattern to check (e.g., "//:target" or "//dir/*").
+                   If None, checks all targets.
+            check_generated: If True, also check generated files.
+            expect_success: If True, fail the test if gn check fails.
+        """
+        cmd = [self.GN_BINARY, 'check', self.out_dir, '--root=' + self.root_dir]
+        if label:
+            cmd.append(label)
+        if check_generated:
+            cmd.append('--check-generated')
+
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        success = result.returncode == 0
+
+        if self.SHOW_GN_OUTPUT:
+            print(f"\ngn check output\n{self.SEPARATOR}")
+            print(f"Command: {' '.join(cmd)}")
+            print(f"Return code: {result.returncode}")
+            if result.stdout:
+                print(f"STDOUT:\n{result.stdout}")
+            if result.stderr:
+                print(f"STDERR:\n{result.stderr}")
+
+        if expect_success and not success:
+            self.fail(f"gn check failed:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}")
+
+        return success, result.stdout, result.stderr
+
     # ========== Ninja Output Helpers ==========
 
     def read_ninja_file(self, name):
@@ -216,4 +248,22 @@ toolchain("default") {
         combined = stdout + stderr
         self.assertIn(warning_substring, combined,
             f"Expected warning containing '{warning_substring}', got:\n{combined}")
+        return stdout, stderr
+
+    def assertGnCheckSucceeds(self, label=None, check_generated=False):
+        """Assert that gn check succeeds."""
+        success, stdout, stderr = self.run_gn_check(
+            label=label, check_generated=check_generated, expect_success=True)
+        self.assertTrue(success, f"Expected gn check to succeed but it failed:\n{stderr}")
+        return stdout, stderr
+
+    def assertGnCheckFails(self, error_substring=None, label=None, check_generated=False):
+        """Assert that gn check fails, optionally with specific error."""
+        success, stdout, stderr = self.run_gn_check(
+            label=label, check_generated=check_generated, expect_success=False)
+        self.assertFalse(success, "Expected gn check to fail but it succeeded")
+        if error_substring:
+            combined = stdout + stderr
+            self.assertIn(error_substring, combined,
+                f"Expected error containing '{error_substring}', got:\n{combined}")
         return stdout, stderr
