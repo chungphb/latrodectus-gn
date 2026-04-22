@@ -18,6 +18,7 @@ class GnTestCase(unittest.TestCase):
     GN_BINARY = None  # Set by runner or auto-detected
     SHOW_NINJA = False  # Set by runner
     SHOW_GN_OUTPUT = False  # Set by runner
+    SHOW_ARGS_GN = False  # Set by runner
 
     def setUp(self):
         """Create temp directory with minimal GN project for each test."""
@@ -110,6 +111,16 @@ toolchain("default") {
     def file_exists(self, path):
         """Check if file exists relative to root_dir."""
         return os.path.exists(os.path.join(self.root_dir, path))
+
+    def write_args_gn(self, content):
+        """Write args.gn to the output directory."""
+        os.makedirs(self.out_dir, exist_ok=True)
+        args_gn_path = os.path.join(self.out_dir, 'args.gn')
+        with open(args_gn_path, 'w') as f:
+            f.write(content)
+        if self.SHOW_ARGS_GN:
+            print(f"\nargs.gn\n{self.SEPARATOR}")
+            print(content)
 
     # ========== GN Execution ==========
 

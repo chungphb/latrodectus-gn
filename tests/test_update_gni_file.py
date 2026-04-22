@@ -119,6 +119,83 @@ class UpdateFileGniTest(GnTestCase):
 
         self.assertGnGenSucceeds()
 
+    def test_overrides_declare_args_value(self):
+        """update_gni_file can override declare_args() values."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            import("//config.gni")
+            assert(my_feature_enabled, "should be overridden to true")
+            group("main") {}
+        '''))
+
+        self.write_file('config.gni', dedent('''
+            declare_args() {
+              my_feature_enabled = false
+            }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_gni_file("//config.gni") {
+              my_feature_enabled = true
+            }
+        '''))
+
+        self.assertGnGenSucceeds()
+
+    def test_appends_to_declare_args_list(self):
+        """update_gni_file can append to declare_args() lists."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            import("//config.gni")
+            assert(extra_deps == [":original", ":added"], "should have both")
+            group("main") {}
+        '''))
+
+        self.write_file('config.gni', dedent('''
+            declare_args() {
+              extra_deps = [":original"]
+            }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_gni_file("//config.gni") {
+              extra_deps += [":added"]
+            }
+        '''))
+
+        self.assertGnGenSucceeds()
+
+    def test_args_gn_overrides_update_gni_file(self):
+        """args.gn user overrides take precedence over update_gni_file."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            import("//config.gni")
+            # args.gn should win over update_gni_file for declare_args variables.
+            assert(my_flag == "from_args_gn", "args.gn should override update_gni_file")
+            # Regular file scope variable is updated by update_gni_file
+            # (args.gn cannot touch file scope vars, only declare_args).
+            assert(regular_var == "from_update_gni_file", "update_gni_file updates file scope var")
+            group("main") {}
+        '''))
+
+        self.write_file('config.gni', dedent('''
+            declare_args() {
+              my_flag = "default"
+            }
+            regular_var = "original"
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_gni_file("//config.gni") {
+              my_flag = "from_update_gni_file"
+              regular_var = "from_update_gni_file"
+            }
+        '''))
+
+        # args.gn overrides declare_args variable, but not regular file scope var
+        self.write_args_gn('my_flag = "from_args_gn"\nregular_var = "from_args_gn"')
+        self.assertGnGenSucceeds()
+
 
 class UpdateFileMultipleGniTest(GnTestCase):
     """Tests for multiple update_gni_file calls on .gni files."""
@@ -271,3 +348,68 @@ class UpdateFileInputValidationTest(GnTestCase):
 
         # Warns about unused update_gni_file but succeeds
         self.assertGnGenSucceedsWithWarning("update_gni_file")
+
+
+class UpdateFileCppDefinesTest(GnTestCase):
+    """Tests for update_gni_file affecting C++ compilation."""
+
+    def test_args_gn_wins_over_update_gni_file_in_cpp_defines(self):
+        """args.gn overrides update_gni_file for C++ defines in ninja."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            import("//config.gni")
+            source_set("test") {
+              sources = ["test.cc"]
+              defines = [ "MY_FLAG=" + my_flag ]
+            }
+        '''))
+
+        self.write_file('test.cc', dedent('''
+            // Dummy C++ file
+        '''))
+
+        self.write_file('config.gni', dedent('''
+            declare_args() {
+              my_flag = "default"
+            }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_gni_file("//config.gni") {
+              my_flag = "from_update_gni_file"
+            }
+        '''))
+
+        # args.gn should win over update_gni_file for declare_args variables
+        self.write_args_gn('my_flag = "from_args_gn"')
+        self.assertGnGenSucceeds()
+
+        # Verify ninja file has the args.gn value, not update_gni_file value
+        self.assertNinjaContains("test.ninja", "MY_FLAG=from_args_gn",
+            "C++ define should use args.gn value")
+        self.assertNinjaNotContains("test.ninja", "MY_FLAG=from_update_gni_file",
+            "C++ define should NOT use update_gni_file value")
+
+    def test_args_flag_wins_over_update_gni_file(self):
+        """gn gen --args flag overrides update_gni_file for declare_args variables."""
+        self.write_file('BUILD.gn', dedent('''
+            import("//updates.gni")
+            import("//config.gni")
+            assert(my_flag == "from_args_flag", "gn --args should override update_gni_file")
+            group("main") {}
+        '''))
+
+        self.write_file('config.gni', dedent('''
+            declare_args() {
+              my_flag = "default"
+            }
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            update_gni_file("//config.gni") {
+              my_flag = "from_update_gni_file"
+            }
+        '''))
+
+        # Use --args flag instead of args.gn file
+        self.run_gn_gen(args=['--args=my_flag = "from_args_flag"'])

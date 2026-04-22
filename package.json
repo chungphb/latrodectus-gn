@@ -13,7 +13,7 @@
     "test": "python3 tests/run_tests.py",
     "test:verbose": "python3 tests/run_tests.py -v",
     "test:case": "python3 tests/run_tests.py -v",
-    "test:debug": "python3 tests/run_tests.py -v --show-ninja --show-gn"
+    "test:debug": "python3 tests/run_tests.py -v --show-ninja --show-gn --show-args-gn"
   },
   "license": "BSD-3-Clause"
 }

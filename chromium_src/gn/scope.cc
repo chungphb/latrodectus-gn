@@ -1,4 +1,7 @@
+#include "gn/args.h"
+#include "gn/build_settings.h"
 #include "gn/scope_per_file_provider.h"
+#include "gn/settings.h"
 #include "gn/standard_out.h"
 #include "gn/target.h"
 
@@ -278,15 +281,42 @@ bool Scope::ApplyFileUpdates(const std::string& file_path,
     extra_scope.MarkAllUsed();
     block_scope.MarkAllUsed();
 
-    // Merge BLOCK SCOPE back into FILE SCOPE with clobber_existing,
-    // so the update values override the originals.
+    // Save args.gn override values for declare_args variables before merge.
+    // args.gn user overrides should take precedence over update_gni_file.
+    const Args& args = scope->settings()->build_settings()->build_args();
+    Args::ValueWithOverrideMap declared_args = args.GetAllArguments();
+    std::vector<std::pair<std::string, Value>> values_to_restore;
+    Scope::KeyValueMap block_values;
+    block_scope.GetCurrentScopeValues(&block_values);
+    for (const auto& pair : block_values) {
+      auto declared_it = declared_args.find(pair.first);
+      if (declared_it != declared_args.end() &&
+          declared_it->second.has_override) {
+        // Use std::string to own the key, since string_view may dangle
+        values_to_restore.emplace_back(std::string(pair.first),
+                                       declared_it->second.override_value);
+      }
+    }
+
+    // Merge BLOCK SCOPE back into FILE SCOPE with clobber_existing.
     Scope::MergeOptions clobber_options;
     clobber_options.clobber_existing = true;
     clobber_options.mark_dest_used = true;
     block_scope.NonRecursiveMergeTo(scope, clobber_options, nullptr,
-                                    "update_file merge", err);
+                                    "update_gni_file merge", err);
     if (err->has_error()) {
       return false;
+    }
+
+    // Restore args.gn override values for declare_args variables.
+    for (const auto& pair : values_to_restore) {
+      // Get the existing key from the scope (set during merge) to avoid
+      // dangling string_view issues.
+      std::string_view key = scope->GetStorageKey(pair.first);
+      if (!key.empty()) {
+        scope->SetValue(key, pair.second, nullptr);
+        scope->MarkUsed(key);
+      }
     }
   }
 
