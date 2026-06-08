@@ -80,6 +80,17 @@ Value RunDisableFile(Scope* scope,
                      const std::vector<Value>& args,
                      Err* err);
 
+// update_gni_file
+extern const char kUpdateGniFile[];
+extern const char kUpdateGniFile_HelpShort[];
+extern const char kUpdateGniFile_Help[];
+
+Value RunUpdateGniFile(Scope* scope,
+                       const FunctionCallNode* function,
+                       const std::vector<Value>& args,
+                       BlockNode* block,
+                       Err* err);
+
 }  // namespace functions
 
 #endif  // LATRODECTUS_CHROMIUM_SRC_GN_FUNCTIONS_H_

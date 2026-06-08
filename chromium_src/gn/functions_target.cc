@@ -517,6 +517,87 @@ bool IsTemplateInstanceDisabled(Scope* scope,
   return false;
 }
 
+// update_gni_file
+// ---------------------------------------------------------------
+const char kUpdateGniFile[] = "update_gni_file";
+const char kUpdateGniFile_HelpShort[] =
+    "update_gni_file: Modify variables in a .gni file before it's imported.";
+const char kUpdateGniFile_Help[] =
+    R"(update_gni_file: Modify variables in a .gni file before it's imported.
+
+  update_gni_file(file_path) {
+    # modifications to variables
+  }
+
+  Allows modifying variables in .gni files after the file is executed but
+  before the result is cached and returned to importers. This lets you
+  override configuration variables defined in .gni files.
+
+  The file_path should be the full path to a .gni file starting with //
+  (e.g., "//foo/bar/config.gni").
+
+Example:
+  # Override a feature flag in a config file
+  update_gni_file("//build/config/features.gni") {
+    enable_feature = true
+  }
+
+  # Append to a list variable
+  update_gni_file("//build/config/deps.gni") {
+    extra_deps += [ "//latrodectus:feature" ]
+  }
+)";
+
+// Registers a .gni file update block to be applied when the file is imported.
+// The block is NOT executed here - it's stored along with a scope snapshot
+// for deferred execution when the file is loaded.
+Value RunUpdateGniFile(Scope* scope,
+                       const FunctionCallNode* function,
+                       const std::vector<Value>& args,
+                       BlockNode* block,
+                       Err* err) {
+  if (args.size() != 1) {
+    *err = Err(function, "update_gni_file requires exactly one argument.");
+    return Value();
+  }
+
+  if (!args[0].VerifyTypeIs(Value::STRING, err)) {
+    return Value();
+  }
+
+  const std::string& file_path = args[0].string_value();
+
+  // Validate the path starts with //
+  if (file_path.size() < 2 || file_path[0] != '/' || file_path[1] != '/') {
+    *err = Err(args[0].origin(),
+               "update_gni_file requires a full path starting with //.",
+               "Got: \"" + file_path + "\"");
+    return Value();
+  }
+
+  // Validate the file is a .gni file
+  if (file_path.size() < 4 ||
+      file_path.compare(file_path.size() - 4, 4, ".gni") != 0) {
+    *err = Err(args[0].origin(), "update_gni_file requires a .gni file path.",
+               "Got: \"" + file_path + "\"");
+    return Value();
+  }
+
+  auto& updaters = Scope::GetFileUpdaters();
+
+  // Create a scope snapshot that captures the current scope as parent.
+  // This allows the update block to access variables from the context
+  // where update_gni_file() was called.
+  std::unique_ptr<Scope> update_scope(new Scope(scope));
+
+  // Store the block and scope for later execution. Using push_back allows
+  // multiple updates for the same file path.
+  updaters[file_path].updates.push_back(
+      std::make_pair(block, std::move(update_scope)));
+
+  return Value();
+}
+
 // disable_file
 // ---------------------------------------------------------------
 const char kDisableFile[] = "disable_file";

@@ -1,0 +1,12 @@
+diff --git a/src/gn/import_manager.cc b/src/gn/import_manager.cc
+index 69f44b48a792539497903fff80368a12c2c44faf..8e922475401e9fa3736707caf562c1acd68eb2aa 100644
+--- a/src/gn/import_manager.cc
++++ b/src/gn/import_manager.cc
+@@ -39,6 +39,7 @@ std::unique_ptr<Scope> UncachedImport(const Settings* settings,
+ 
+   scope->SetProcessingImport();
+   node->Execute(scope.get(), err);
++  LATRODECTUS_GN_IMPORT_MANAGER_UNCACHED_IMPORT
+   if (err->has_error()) {
+     // If there was an error, append the caller location so the error message
+     // displays a why the file was imported (esp. useful for failed asserts).
