@@ -352,4 +352,58 @@ void ClearTargetScope(Scope* scope) {
   scope->SetValue("defines", Value(nullptr, Value::LIST), nullptr);
 }
 
+// disable_file
+// ---------------------------------------------------------------
+const char kDisableFile[] = "disable_file";
+const char kDisableFile_HelpShort[] =
+    "disable_file: Prevent a BUILD.gn file from being loaded.";
+const char kDisableFile_Help[] =
+    R"(disable_file: Prevent a BUILD.gn file from being loaded.
+
+  disable_file(file_path)
+
+  Marks a BUILD.gn file to be skipped during loading. When GN attempts to
+  load the file, it will be treated as an empty file. This is useful for
+  excluding entire directories without patching the original BUILD.gn files.
+
+  The file_path should be the full path starting with // (e.g.,
+  "//foo/bar/BUILD.gn").
+
+  Unlike disable_target(), this prevents the file from being parsed at all,
+  which avoids issues with declare_args() conflicts and top-level asserts.
+
+Example:
+  disable_file("//third_party/unwanted/BUILD.gn")
+)";
+
+// Registers a file to be disabled. The file will not be loaded or parsed.
+Value RunDisableFile(Scope* scope,
+                     const FunctionCallNode* function,
+                     const std::vector<Value>& args,
+                     Err* err) {
+  if (args.size() != 1) {
+    *err = Err(function, "disable_file requires exactly one argument.");
+    return Value();
+  }
+
+  if (!args[0].VerifyTypeIs(Value::STRING, err)) {
+    return Value();
+  }
+
+  const std::string& file_path = args[0].string_value();
+
+  // Validate the path starts with //
+  if (file_path.size() < 2 || file_path[0] != '/' || file_path[1] != '/') {
+    *err = Err(args[0].origin(),
+               "disable_file requires a full path starting with //.",
+               "Got: \"" + file_path + "\"");
+    return Value();
+  }
+
+  auto& disabled = Scope::GetDisabledFiles();
+  disabled[file_path].origin = function;
+
+  return Value();
+}
+
 }  // namespace functions

@@ -56,6 +56,16 @@ bool IsTargetDisabled(Scope* scope,
 
 void ClearTargetScope(Scope* scope);
 
+// disable_file
+extern const char kDisableFile[];
+extern const char kDisableFile_HelpShort[];
+extern const char kDisableFile_Help[];
+
+Value RunDisableFile(Scope* scope,
+                     const FunctionCallNode* function,
+                     const std::vector<Value>& args,
+                     Err* err);
+
 }  // namespace functions
 
 #endif  // LATRODECTUS_CHROMIUM_SRC_GN_FUNCTIONS_H_

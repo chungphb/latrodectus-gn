@@ -39,14 +39,25 @@ class Target;
   static DisabledTargetMap& GetDisabledTargets() {                     \
     return disabled_targets;                                           \
   }                                                                    \
+  struct DisabledFileItem {                                            \
+    bool used = false;                                                 \
+    const ParseNode* origin = nullptr;                                 \
+  };                                                                   \
+  using DisabledFileMap = std::map<std::string, DisabledFileItem>;     \
+  static DisabledFileMap& GetDisabledFiles() {                         \
+    return disabled_files;                                             \
+  }                                                                    \
   static bool VerifyAllUpdatesUsed(Err* err);                          \
   static bool CheckDepsOnDisabledTargets(                              \
       const std::vector<const Target*>& targets, Err* err);            \
+  static bool IsFileDisabled(const std::string& file_path);            \
+  static void MarkFileDisabledUsed(const std::string& file_path);      \
                                                                        \
  private:                                                              \
   static UpdateParseMap target_update_list;                            \
   static UpdateParseMap template_update_list;                          \
-  static DisabledTargetMap disabled_targets
+  static DisabledTargetMap disabled_targets;                           \
+  static DisabledFileMap disabled_files
 
 #include "../../gn/src/gn/scope.h"
 
