@@ -110,13 +110,17 @@ bool UpdateTheTarget(Scope* scope,
   // to execute (update.first) and the SAVED SCOPE captured at registration
   // time (update.second).
   for (auto& update : it->second.updates) {
-    // Merge SAVED SCOPE into EXTRA SCOPE with prefer_existing,
-    // so target's current values take precedence over saved values.
+    // Create EXTRA SCOPE as child of SAVED SCOPE so the update block can
+    // access variables from where update_target() was called (like config
+    // flags imported at that time).
+    Scope extra_scope(update.second.get());
+
+    // Merge TARGET SCOPE variables into EXTRA SCOPE so they're accessible
+    // and take precedence over saved scope variables.
     Scope::MergeOptions prefer_options;
     prefer_options.prefer_existing = true;
-    Scope extra_scope(scope);
-    update.second->NonRecursiveMergeTo(&extra_scope, prefer_options, function,
-                                       "update_target import", err);
+    scope->NonRecursiveMergeTo(&extra_scope, prefer_options, function,
+                               "update_target target vars", err);
     if (err->has_error()) {
       return false;
     }
@@ -230,13 +234,16 @@ bool UpdateTheTemplate(Scope* scope,
   // to execute (update.first) and the SAVED SCOPE captured at registration
   // time (update.second).
   for (auto& update : it->second.updates) {
-    // Merge SAVED SCOPE into EXTRA SCOPE with prefer_existing,
-    // so target's current values take precedence over saved values.
+    // Create EXTRA SCOPE as child of SAVED SCOPE so the update block can
+    // access variables from where update_template_instance() was called.
+    Scope extra_scope(update.second.get());
+
+    // Merge TARGET SCOPE variables into EXTRA SCOPE so they're accessible
+    // and take precedence over saved scope variables.
     Scope::MergeOptions prefer_options;
     prefer_options.prefer_existing = true;
-    Scope extra_scope(scope);
-    update.second->NonRecursiveMergeTo(&extra_scope, prefer_options, function,
-                                       "update_template import", err);
+    scope->NonRecursiveMergeTo(&extra_scope, prefer_options, function,
+                               "update_template target vars", err);
     if (err->has_error()) {
       return false;
     }

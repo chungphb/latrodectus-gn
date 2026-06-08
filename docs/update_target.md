@@ -166,7 +166,7 @@ Each toolchain variant is tracked separately using its full label (with toolchai
 3. **Application**: When `ExecuteGenericTarget()` runs, it calls `UpdateTheTarget()`
 4. **Label Matching**: Uses label WITHOUT toolchain for lookup (matches all variants)
 5. **Tracking**: Uses label WITH toolchain for `targets_done` (each variant updated once)
-6. **Merge**: Saved scope merges with `prefer_existing`, block executes, results merge with `clobber_existing`
+6. **Scope Setup**: Execution scope is created as child of saved scope (giving access to registration context via parent chain), then target variables are merged in (taking precedence)
 7. **Verification**: At build end, `VerifyAllUpdatesUsed()` warns about unused updates
 
 ## Warnings

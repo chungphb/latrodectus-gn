@@ -52,12 +52,12 @@ TARGET SCOPE created:
 
 **Step 3: Update is applied**
 ```
-1. Create EXTRA SCOPE (child of TARGET SCOPE)
-   - Can read deps from parent → Gets []
+1. Create EXTRA SCOPE (child of SAVED SCOPE)
+   - Merge TARGET SCOPE vars → Gets deps = []
 
 2. Create BLOCK SCOPE (child of EXTRA SCOPE)
    - Execute: deps += [":helper"]
-   - Read deps from parent chain → []
+   - Read deps from EXTRA SCOPE → []
    - Compute: [] + [":helper"] = [":helper"]
    - Write: deps = [":helper"]
 
@@ -95,12 +95,12 @@ TARGET SCOPE:
 
 **Step 2: Update is applied**
 ```
-1. Create EXTRA SCOPE (child of TARGET SCOPE)
-   - Can read sources from parent → Gets ["main.cc"]
+1. Create EXTRA SCOPE (child of SAVED SCOPE)
+   - Merge TARGET SCOPE vars → Gets sources = ["main.cc"]
 
 2. Create BLOCK SCOPE (child of EXTRA SCOPE)
    - Execute: sources += ["extra.cc"]
-   - Read sources from parent chain → ["main.cc"]
+   - Read sources from EXTRA SCOPE → ["main.cc"]
    - Compute: ["main.cc"] + ["extra.cc"]
    - Write: sources = ["main.cc", "extra.cc"]
 
@@ -139,12 +139,12 @@ TARGET SCOPE:
 
 **First update applied:**
 ```
-1. Create EXTRA SCOPE (child of TARGET SCOPE)
-   - Can read deps from parent → Gets []
+1. Create EXTRA SCOPE (child of SAVED SCOPE)
+   - Merge TARGET SCOPE vars → Gets deps = []
 
 2. Create BLOCK SCOPE (child of EXTRA SCOPE)
    - Execute: deps += [":helper"]
-   - Read deps from parent chain → []
+   - Read deps from EXTRA SCOPE → []
    - Compute: [] + [":helper"] = [":helper"]
    - Write: deps = [":helper"]
 
@@ -154,8 +154,8 @@ TARGET SCOPE:
 
 **Second update applied:**
 ```
-1. Create EXTRA SCOPE (child of TARGET SCOPE)
-   - Can read deps from parent → Gets [":helper"]
+1. Create EXTRA SCOPE (child of SAVED SCOPE)
+   - Merge TARGET SCOPE vars → Gets deps = [":helper"]
 
 2. Create BLOCK SCOPE (child of EXTRA SCOPE)
    - Execute: defines = ["UPDATED=1"]
@@ -174,9 +174,9 @@ TARGET SCOPE:
 When an update runs, there are 3 scopes:
 
 ```
-TARGET SCOPE          ← The actual target (has deps, sources, etc.)
+SAVED SCOPE           ← Captured when update_target() called (has config vars)
   │
-  └── EXTRA SCOPE     ← Bridge: target vars + SAVED SCOPE vars merged in
+  └── EXTRA SCOPE     ← Bridge: SAVED context via parent + TARGET vars merged in
         │
         └── BLOCK SCOPE   ← Where update code runs (isolated writes)
 ```
@@ -199,28 +199,29 @@ The SAVED SCOPE captures `latrodectus_extra_dep` so it's available later when th
 ### Why EXTRA SCOPE?
 
 EXTRA SCOPE bridges TWO contexts:
-1. **TARGET SCOPE** (via parent chain) → Read target's current `deps`, `sources`, etc.
-2. **SAVED SCOPE** (via merge) → Read variables like `latrodectus_extra_dep` from registration time
+1. **SAVED SCOPE** (via parent chain) → Read variables like `latrodectus_extra_dep` from registration time
+2. **TARGET SCOPE** (via merge) → Read target's current `deps`, `sources`, etc.
 
 ```
-BLOCK SCOPE reads deps → EXTRA → TARGET → Found!
-BLOCK SCOPE reads latrodectus_extra_dep → EXTRA → Found! (merged from SAVED)
+BLOCK SCOPE reads latrodectus_extra_dep → EXTRA → SAVED → Found! (via parent chain)
+BLOCK SCOPE reads deps → EXTRA → Found! (merged from TARGET)
 ```
 
-Without EXTRA SCOPE, the update block couldn't access registration-time variables.
+Without EXTRA SCOPE, the update block couldn't access registration-time variables (like imported config flags).
 
 | Scope | Why It Exists |
 |-------|---------------|
-| SAVED SCOPE | Captured when `update_target()` called. Holds context variables. |
+| SAVED SCOPE | Captured when `update_target()` called. Holds context variables (imports, config flags). |
 | TARGET SCOPE | The real target being modified. |
-| EXTRA SCOPE | Bridge that combines TARGET + SAVED for reading. |
+| EXTRA SCOPE | Child of SAVED (parent chain access) + TARGET vars merged in. |
 | BLOCK SCOPE | Isolates WRITES so we can merge them cleanly. |
 
 **The flow:**
-1. SAVED SCOPE vars merged into EXTRA SCOPE
-2. Update block READS through parent chain (BLOCK → EXTRA → TARGET)
-3. Update block WRITES to BLOCK SCOPE
-4. BLOCK SCOPE is merged back to TARGET SCOPE
+1. EXTRA SCOPE created as child of SAVED SCOPE (parent chain gives access to registration context)
+2. TARGET SCOPE vars merged into EXTRA SCOPE (target vars take precedence)
+3. Update block READS through parent chain (BLOCK → EXTRA → SAVED) or from merged TARGET vars
+4. Update block WRITES to BLOCK SCOPE
+5. BLOCK SCOPE is merged back to TARGET SCOPE
 
 ---
 
