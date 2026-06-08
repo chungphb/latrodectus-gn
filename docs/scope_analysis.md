@@ -225,34 +225,6 @@ Without EXTRA SCOPE, the update block couldn't access registration-time variable
 
 ---
 
-## Testing
-
-```bash
-# From project root
-npm run build
-./out/gn gen test_project/out --root=test_project
-
-# Test 1: Basic update
-./out/gn desc test_project/out //:basic deps --root=test_project
-# Expected: //:helper
-
-# Test 2: Multiple updates
-./out/gn desc test_project/out //:multi deps --root=test_project
-./out/gn desc test_project/out //:multi defines --root=test_project
-# Expected: //:helper
-# Expected: UPDATED=1
-
-# Test 3: Append to existing
-./out/gn desc test_project/out //:append sources --root=test_project
-# Expected: main.cc, extra.cc
-
-# Test 4: Template instance
-./out/gn desc test_project/out //:from_template deps --root=test_project
-# Expected: //:helper
-```
-
----
-
 ## Common Mistakes
 
 ### Wrong: Update AFTER target
