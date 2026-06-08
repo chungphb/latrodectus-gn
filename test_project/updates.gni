@@ -14,3 +14,14 @@ update_target("//:registration_context_test") {
     deps += [ test_extra_dep ]
   }
 }
+
+# TEST: Update block uses built-in variables like root_gen_dir
+# This tests that ScopePerFileProvider is available during update block execution.
+# Without the fix, this would fail with "root_gen_dir is not currently in scope"
+update_target("//:builtin_vars_test") {
+  # Use root_gen_dir - the test passes if this doesn't error with "undefined"
+  # We use assert() to consume the value and verify it's not empty
+  assert(root_gen_dir != "", "root_gen_dir should be available")
+  assert(current_toolchain != "", "current_toolchain should be available")
+  assert(root_build_dir != "", "root_build_dir should be available")
+}

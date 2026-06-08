@@ -171,6 +171,15 @@ group("registration_context_test") {
 # Result: deps = [":config_dep"] (because test_feature_enabled=true)
 
 # =============================================================================
+# TEST: Built-in variables in update blocks (root_gen_dir, etc.)
+# =============================================================================
+# Tests that ScopePerFileProvider is available during update block execution.
+# The update in updates.gni uses $root_gen_dir which requires the provider.
+
+group("builtin_vars_test") {
+}
+
+# =============================================================================
 # Aliases for backward compatibility with old test names
 # =============================================================================
 group("my_target") {
