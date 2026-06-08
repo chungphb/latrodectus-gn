@@ -419,6 +419,100 @@ void ClearTargetScope(Scope* scope) {
   scope->SetValue("defines", Value(nullptr, Value::LIST), nullptr);
 }
 
+// disable_template_instance
+// ---------------------------------------------------------------
+const char kDisableTemplateInstance[] = "disable_template_instance";
+const char kDisableTemplateInstance_HelpShort[] =
+    "disable_template_instance: Disable a template instantiation.";
+const char kDisableTemplateInstance_Help[] =
+    R"(disable_template_instance: Disable a template instantiation.
+
+  disable_template_instance(target_label)
+
+  Marks a template instantiation to be disabled. When the template is invoked
+  with the specified label, it will return early without executing the template
+  body. This is useful for excluding targets created by templates without
+  patching the original BUILD.gn files.
+
+  The target_label should match the label of the template instantiation.
+  Wildcard patterns (//foo:*) are supported.
+
+Example:
+  disable_template_instance("//foo:bar")
+  disable_template_instance("//third_party/unwanted:*")
+)";
+
+// Registers a template instance to be disabled.
+// The template will be skipped entirely when invoked with this label.
+Value RunDisableTemplateInstance(Scope* scope,
+                                 const FunctionCallNode* function,
+                                 const std::vector<Value>& args,
+                                 Err* err) {
+  if (args.size() != 1) {
+    *err = Err(function,
+               "disable_template_instance requires exactly one argument.");
+    return Value();
+  }
+
+  if (!args[0].VerifyTypeIs(Value::STRING, err)) {
+    return Value();
+  }
+
+  const std::string& label_input = args[0].string_value();
+  auto& disabled = Scope::GetDisabledTemplateInstances();
+
+  // Check for wildcard pattern (//foo:*)
+  if (label_input.size() >= 2 &&
+      label_input.substr(label_input.size() - 2) == ":*") {
+    // Store wildcard patterns as-is
+    disabled[label_input].origin = function;
+  } else {
+    // Normalize the label to fully-qualified form (//foo/bar -> //foo/bar:bar)
+    // so it matches the lookup in IsTemplateInstanceDisabled.
+    std::string label = NormalizeLabelForScope(scope, function, label_input);
+    disabled[label].origin = function;
+  }
+
+  return Value();
+}
+
+// Checks if a template instance is disabled by looking up its label.
+// Supports both exact match (//foo:bar) and wildcard (//foo:*).
+// Marks the disabled entry as used when matched.
+bool IsTemplateInstanceDisabled(Scope* scope,
+                                const FunctionCallNode* function,
+                                const std::vector<Value>& args) {
+  if (args.empty()) {
+    return false;
+  }
+
+  const std::string& target_name = args[0].string_value();
+  Label current_label = MakeLabelForScope(scope, function, target_name);
+  std::string lookup_label = current_label.GetUserVisibleName(false);
+
+  auto& disabled = Scope::GetDisabledTemplateInstances();
+
+  // Check exact match
+  auto it = disabled.find(lookup_label);
+  if (it != disabled.end()) {
+    it->second.used = true;
+    return true;
+  }
+
+  // Check wildcard match (//foo:* matches //foo:bar)
+  size_t colon_pos = lookup_label.rfind(':');
+  if (colon_pos != std::string::npos) {
+    std::string wildcard_label = lookup_label.substr(0, colon_pos + 1) + "*";
+    auto wit = disabled.find(wildcard_label);
+    if (wit != disabled.end()) {
+      wit->second.used = true;
+      return true;
+    }
+  }
+
+  return false;
+}
+
 // disable_file
 // ---------------------------------------------------------------
 const char kDisableFile[] = "disable_file";

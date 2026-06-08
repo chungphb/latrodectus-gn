@@ -22,6 +22,7 @@ Scope::UpdateParseItem::~UpdateParseItem() = default;
 Scope::UpdateParseMap Scope::target_update_list;
 Scope::UpdateParseMap Scope::template_update_list;
 Scope::DisabledTargetMap Scope::disabled_targets;
+Scope::DisabledTemplateInstanceMap Scope::disabled_template_instances;
 Scope::DisabledFileMap Scope::disabled_files;
 
 // Verify all update_target/update_template_instance/disable_target calls were
@@ -57,6 +58,21 @@ bool VerifyAllDisabledTargetsUsed(Scope::DisabledTargetMap& map, Err* err) {
   return true;
 }
 
+bool VerifyAllDisabledTemplateInstancesUsed(
+    Scope::DisabledTemplateInstanceMap& map,
+    Err* err) {
+  for (const auto& it : map) {
+    if (!it.second.used && it.second.origin) {
+      std::string help = "You set disable_template_instance for the label \"" +
+                         it.first + "\" here but it was never matched.\n";
+      *err = it.second.origin->MakeErrorDescribing(
+          "Unused disable_template_instance.", help);
+      return false;
+    }
+  }
+  return true;
+}
+
 bool VerifyAllDisabledFilesUsed(Scope::DisabledFileMap& map, Err* err) {
   for (const auto& it : map) {
     if (!it.second.used && it.second.origin) {
@@ -77,6 +93,8 @@ bool Scope::VerifyAllUpdatesUsed(Err* err) {
       VerifyAllUpdatesInListUsed(template_update_list,
                                  "update_template_instance", err) &&
       VerifyAllDisabledTargetsUsed(disabled_targets, err) &&
+      VerifyAllDisabledTemplateInstancesUsed(disabled_template_instances,
+                                             err) &&
       VerifyAllDisabledFilesUsed(disabled_files, err));
 }
 
@@ -133,6 +151,58 @@ bool Scope::CheckDepsOnDisabledTargets(
           } else {
             *err = Err(target->defined_from(), "Dependency on disabled target.",
                        msg);
+          }
+          return false;
+        }
+      }
+    }
+  }
+  return true;
+}
+
+bool Scope::CheckDepsOnDisabledTemplateInstances(
+    const std::vector<const Target*>& targets,
+    Err* err) {
+  if (disabled_template_instances.empty()) {
+    return true;
+  }
+
+  for (const Target* target : targets) {
+    // Check all dependency types
+    const LabelTargetVector* dep_lists[] = {
+        &target->private_deps(),
+        &target->public_deps(),
+        &target->data_deps(),
+    };
+
+    for (const LabelTargetVector* deps : dep_lists) {
+      for (const auto& dep : *deps) {
+        std::string dep_label = dep.label.GetUserVisibleName(false);
+
+        // Check exact match
+        bool is_disabled = disabled_template_instances.find(dep_label) !=
+                           disabled_template_instances.end();
+
+        // Check wildcard match (//foo:* matches //foo:bar)
+        if (!is_disabled) {
+          size_t colon_pos = dep_label.rfind(':');
+          if (colon_pos != std::string::npos) {
+            std::string wildcard = dep_label.substr(0, colon_pos + 1) + "*";
+            is_disabled = disabled_template_instances.find(wildcard) !=
+                          disabled_template_instances.end();
+          }
+        }
+
+        if (is_disabled) {
+          std::string msg =
+              "Target " + target->label().GetUserVisibleName(false) +
+              " depends on disabled template instance " + dep_label + ".\n";
+          if (dep.origin) {
+            *err = Err(dep.origin, "Dependency on disabled template instance.",
+                       msg);
+          } else {
+            *err = Err(target->defined_from(),
+                       "Dependency on disabled template instance.", msg);
           }
           return false;
         }
