@@ -1,0 +1,8 @@
+# GN source (cloned by npm run init)
+gn/
+
+# Build output
+out/
+
+# Patchinfo (generated locally)
+patches/*.patchinfo
