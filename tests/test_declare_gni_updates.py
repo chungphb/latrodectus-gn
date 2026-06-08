@@ -433,10 +433,9 @@ class DeclareGniUpdatesNestedCallsTest(GnTestCase):
 class DeclareGniUpdatesImportLoopTest(GnTestCase):
     """Tests for import loop detection with declare_gni_updates."""
 
-    def test_import_loop_via_auto_import_detected(self):
-        """Import loop involving auto-imported updater is detected."""
-        # Scenario: declare_gni_updates auto-imports updates.gni before config.gni
-        # updates.gni imports config.gni, config.gni imports updates.gni -> loop
+    def test_detects_loop_when_target_imports_updater(self):
+        """Detects loop when target file imports the updater file."""
+        # config.gni imports updates.gni, updates.gni imports config.gni
         self.write_file('BUILD.gn', dedent('''
             import("//config.gni")
             group("main") {}
@@ -461,15 +460,13 @@ class DeclareGniUpdatesImportLoopTest(GnTestCase):
 
         self.assertGnGenFails("import loop")
 
-    def test_chained_updater_importing_target_works(self):
-        """Updater importing another updater's target does not create loop."""
-        # Scenario:
-        # - another_updates.gni updates config.gni, imports updates.gni
-        # - updates.gni imports config.gni (another_updates's target)
-        # This should work because mapping is erased before auto-import
+    def test_skips_update_when_updater_imports_target_first(self):
+        """Skips update when updater's import chain imports target first."""
+        # another_updates.gni imports updates.gni before calling update_gni_file,
+        # updates.gni imports config.gni, so config.gni gets cached first.
         self.write_file('BUILD.gn', dedent('''
             import("//config.gni")
-            assert(value == "updated", "value should be updated")
+            assert(value == "original")
             group("main") {}
         '''))
 
@@ -479,7 +476,6 @@ class DeclareGniUpdatesImportLoopTest(GnTestCase):
 
         self.write_file('updates.gni', dedent('''
             import("//config.gni")
-            # updates.gni imports config.gni which is another_updates's target
         '''))
 
         self.write_file('another_updates.gni', dedent('''
@@ -496,13 +492,42 @@ class DeclareGniUpdatesImportLoopTest(GnTestCase):
 
         self.assertGnGenSucceeds()
 
-    def test_import_loop_when_importing_updater_directly(self):
-        """Loop detected when BUILD.gn imports updater that triggers auto-import chain."""
-        # Scenario:
-        # - BUILD.gn imports updates.gni directly
-        # - updates.gni imports config.gni
-        # - config.gni triggers auto-import of another_updates.gni
-        # - another_updates.gni imports updates.gni -> loop
+    def test_detects_loop_when_build_imports_updater_first(self):
+        """Detects loop when BUILD.gn imports updater before target."""
+        # BUILD.gn imports another_updates.gni first, which imports updates.gni,
+        # which imports config.gni, triggering auto-import of another_updates.gni.
+        self.write_file('BUILD.gn', dedent('''
+            import("//another_updates.gni")
+            import("//config.gni")
+            group("main") {}
+        '''))
+
+        self.write_file('config.gni', dedent('''
+            value = "original"
+        '''))
+
+        self.write_file('updates.gni', dedent('''
+            import("//config.gni")
+        '''))
+
+        self.write_file('another_updates.gni', dedent('''
+            import("//updates.gni")
+            update_gni_file("//config.gni") {
+              value = "updated"
+            }
+        '''))
+
+        self.write_file('BUILDCONFIG.gn', dedent('''
+            declare_gni_updates("//another_updates.gni")
+            set_default_toolchain("//toolchain:default")
+        '''))
+
+        self.assertGnGenFails("import loop")
+
+    def test_detects_loop_when_build_imports_intermediate_file(self):
+        """Detects loop when BUILD.gn imports file that triggers updater chain."""
+        # BUILD.gn imports updates.gni, which imports config.gni,
+        # triggering auto-import of another_updates.gni, which imports updates.gni.
         self.write_file('BUILD.gn', dedent('''
             import("//updates.gni")
             group("main") {}
