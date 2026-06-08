@@ -1,0 +1,12 @@
+diff --git a/src/gn/gn_main.cc b/src/gn/gn_main.cc
+index e1a05177beefd2eebb5d10a01d0e627e0e979194..32e107a705ec9cfa74d0b5bc7c4e56c6ed230202 100644
+--- a/src/gn/gn_main.cc
++++ b/src/gn/gn_main.cc
+@@ -49,6 +49,7 @@ int main(int argc, char** argv) {
+     command = commands::kHelp;
+   } else if (cmdline.HasSwitch(switches::kVersion)) {
+     // Make "--version" print the version and exit.
++    LATRODECTUS_GN_GN_MAIN_VERSION_OUTPUT
+     OutputString(std::string(LAST_COMMIT_POSITION) + "\n");
+     exit(0);
+   } else if (args.empty()) {

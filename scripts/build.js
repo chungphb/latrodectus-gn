@@ -42,9 +42,10 @@ async function main() {
     process.exit(1)
   }
 
-  // Generate build files
+  // Generate build files using our wrapper (not the upstream gen.py)
+  // Note: gen.py changes to gn/ dir, so out-path is relative to gn/
   console.log('Generating build files...')
-  execSync('python3 build/gen.py --out-path=../out', { cwd: util.GN_DIR, stdio: 'inherit' })
+  execSync('python3 build/gen.py --out-path=../out', { cwd: util.ROOT_DIR, stdio: 'inherit' })
 
   console.log(util.SEPARATOR)
 
