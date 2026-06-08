@@ -26,6 +26,7 @@ Scope::UpdateParseMap Scope::file_update_list;
 Scope::DisabledTargetMap Scope::disabled_targets;
 Scope::DisabledTemplateInstanceMap Scope::disabled_template_instances;
 Scope::DisabledFileMap Scope::disabled_files;
+Scope::DeclaredUpdatersMap Scope::declared_updaters;
 
 // Verify all update_target/update_template_instance/disable_target calls were
 // used

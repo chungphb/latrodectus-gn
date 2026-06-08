@@ -175,13 +175,3 @@ if (is_latrodectus && is_linux) {
   }
 }
 ```
-
-## Comparison with Other Functions
-
-| Function | Purpose | Target |
-|----------|---------|--------|
-| `update_gni_file` | Modify variables in `.gni` files | `.gni` files only |
-| `update_target` | Modify target properties | Targets in BUILD.gn |
-| `update_template_instance` | Modify template instance parameters | Template invocations |
-| `disable_file` | Skip loading a BUILD.gn file | BUILD.gn files |
-| `disable_target` | Create empty placeholder target | Targets in BUILD.gn |

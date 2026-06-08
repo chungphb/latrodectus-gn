@@ -55,6 +55,10 @@ class Target;
   static UpdateParseMap& GetFileUpdaters() {                               \
     return file_update_list;                                               \
   }                                                                        \
+  using DeclaredUpdatersMap = std::map<std::string, std::string>;          \
+  static DeclaredUpdatersMap& GetDeclaredUpdaters() {                      \
+    return declared_updaters;                                              \
+  }                                                                        \
   static bool VerifyAllUpdatesUsed(Err* err);                              \
   static bool CheckDepsOnDisabledTargets(                                  \
       const std::vector<const Target*>& targets, Err* err);                \
@@ -71,7 +75,8 @@ class Target;
   static UpdateParseMap file_update_list;                                  \
   static DisabledTargetMap disabled_targets;                               \
   static DisabledTemplateInstanceMap disabled_template_instances;          \
-  static DisabledFileMap disabled_files
+  static DisabledFileMap disabled_files;                                   \
+  static DeclaredUpdatersMap declared_updaters
 
 #include "../../gn/src/gn/scope.h"
 

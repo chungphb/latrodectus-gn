@@ -1,8 +1,8 @@
 diff --git a/src/gn/functions.cc b/src/gn/functions.cc
-index 8386de59b34f82a888bb68060870f670e5e495bb..1c0e15c73972192887e3329b626d8955342f0e3e 100644
+index 8386de59b34f82a888bb68060870f670e5e495bb..f78ebff3ddfadf74c5f0289886e12ae63a4e9a7c 100644
 --- a/src/gn/functions.cc
 +++ b/src/gn/functions.cc
-@@ -1494,6 +1494,12 @@ struct FunctionInfoInitializer {
+@@ -1494,6 +1494,13 @@ struct FunctionInfoInitializer {
      INSERT_FUNCTION(Tool, false)
      INSERT_FUNCTION(Toolchain, false)
      INSERT_FUNCTION(WriteFile, false)
@@ -12,6 +12,7 @@ index 8386de59b34f82a888bb68060870f670e5e495bb..1c0e15c73972192887e3329b626d8955
 +    INSERT_FUNCTION(DisableTarget, false)
 +    INSERT_FUNCTION(DisableFile, false)
 +    INSERT_FUNCTION(DisableTemplateInstance, false)
++    INSERT_FUNCTION(DeclareGniUpdates, false)
  
  #undef INSERT_FUNCTION
    }
