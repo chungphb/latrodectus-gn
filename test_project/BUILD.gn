@@ -75,6 +75,40 @@ my_template("from_template") {
 # Result: deps = [":helper"]
 
 # =============================================================================
+# TEST 5: disable_target
+# =============================================================================
+# Disables a target, making it a no-op (empty sources, deps, etc.)
+
+disable_target("//:disabled_target")
+
+source_set("disabled_target") {
+  sources = [ "should_not_exist.cc" ]
+  deps = [ ":helper" ]
+}
+# Result: sources = [], deps = []
+
+# =============================================================================
+# TEST 6: Error for deps on disabled target
+# =============================================================================
+# Uncommenting this target causes gn gen to fail with an error because it
+# depends on a disabled target.
+
+# group("uses_disabled") {
+#   deps = [ ":disabled_target" ]
+# }
+
+# =============================================================================
+# TEST 7: Wildcard disable_target
+# =============================================================================
+# disable_target("//subdir:*") disables all targets in //subdir/BUILD.gn
+# Uncommenting the line below causes gn gen to fail with an error because
+# the wildcard disables all targets in //subdir.
+
+# group("wildcard_test") {
+#   deps = [ "//subdir:target_a" ]
+# }
+
+# =============================================================================
 # Aliases for backward compatibility with old test names
 # =============================================================================
 group("my_target") {

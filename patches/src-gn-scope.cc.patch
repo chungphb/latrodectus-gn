@@ -1,7 +1,8 @@
 diff --git a/src/gn/scope.cc b/src/gn/scope.cc
+index 0e8ec91df86e3c52fdb47e73a99128a54f5c542c..0640464b9cd7987d90b87fd2f580dfcb4255e385 100644
 --- a/src/gn/scope.cc
 +++ b/src/gn/scope.cc
-@@ -354,6 +354,7 @@ bool Scope::NonRecursiveMergeTo(Scope* dest,
+@@ -348,6 +348,7 @@ bool Scope::NonRecursiveMergeTo(Scope* dest,
      if (!options.clobber_existing) {
        const Value* existing_value = dest->GetValue(current_name);
        if (existing_value && new_value != *existing_value) {
