@@ -1,0 +1,43 @@
+#ifndef LATRODECTUS_CHROMIUM_SRC_GN_SCOPE_H_
+#define LATRODECTUS_CHROMIUM_SRC_GN_SCOPE_H_
+
+// Hook to inject prefer_existing into MergeOptions
+#define clobber_existing \
+  clobber_existing;      \
+  bool prefer_existing = false
+
+// Hook to inject update_target types, getters, and static members
+#define template_invocation_entry_                               \
+  template_invocation_entry_;                                    \
+                                                                 \
+ public:                                                         \
+  using UpdateParseListElement =                                 \
+      std::pair<const ParseNode*, std::unique_ptr<Scope>>;       \
+  using UpdateParseList = std::vector<UpdateParseListElement>;   \
+  using UpdatedTargetSet = std::set<std::string>;                \
+  struct UpdateParseItem {                                       \
+    bool used = false;                                           \
+    UpdateParseList updates;                                     \
+    UpdatedTargetSet targets_done;                               \
+    UpdateParseItem();                                           \
+    ~UpdateParseItem();                                          \
+  };                                                             \
+  using UpdateParseMap = std::map<std::string, UpdateParseItem>; \
+  static UpdateParseMap& GetTargetUpdaters() {                   \
+    return target_update_list;                                   \
+  }                                                              \
+  static UpdateParseMap& GetTemplateInstanceUpdaters() {         \
+    return template_update_list;                                 \
+  }                                                              \
+  static bool VerifyAllUpdatesUsed(Err* err);                    \
+                                                                 \
+ private:                                                        \
+  static UpdateParseMap target_update_list;                      \
+  static UpdateParseMap template_update_list
+
+#include "../../gn/src/gn/scope.h"
+
+#undef clobber_existing
+#undef template_invocation_entry_
+
+#endif  // LATRODECTUS_CHROMIUM_SRC_GN_SCOPE_H_

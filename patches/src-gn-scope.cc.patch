@@ -1,0 +1,11 @@
+diff --git a/src/gn/scope.cc b/src/gn/scope.cc
+--- a/src/gn/scope.cc
++++ b/src/gn/scope.cc
+@@ -354,6 +354,7 @@ bool Scope::NonRecursiveMergeTo(Scope* dest,
+     if (!options.clobber_existing) {
+       const Value* existing_value = dest->GetValue(current_name);
+       if (existing_value && new_value != *existing_value) {
++        LATRODECTUS_GN_SCOPE_NON_RECURSIVE_MERGE_TO
+         // Value present in both the source and the dest.
+         std::string desc_string(desc_for_err);
+         *err = Err(node_for_err, "Value collision.",

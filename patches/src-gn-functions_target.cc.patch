@@ -1,0 +1,12 @@
+diff --git a/src/gn/functions_target.cc b/src/gn/functions_target.cc
+index 9a19c410203b3af9f2d24b07b17ccf5bcf61ac0c..f4ee00611e940f58a8268866d5acc77d9810a62e 100644
+--- a/src/gn/functions_target.cc
++++ b/src/gn/functions_target.cc
+@@ -56,6 +56,7 @@ Value ExecuteGenericTarget(const char* target_type,
+   block->Execute(&block_scope, err);
+   if (err->has_error())
+     return Value();
++  LATRODECTUS_GN_FUNCTIONS_TARGET_EXECUTE_GENERIC_TARGET
+ 
+   TargetGenerator::GenerateTarget(&block_scope, function, args, target_type,
+                                   err);
