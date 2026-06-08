@@ -7,7 +7,8 @@
     "sync": "node scripts/sync.js",
     "build": "node scripts/build.js",
     "update_patches": "node scripts/updatePatches.js",
-    "apply_patches": "node scripts/applyPatches.js"
+    "apply_patches": "node scripts/applyPatches.js",
+    "format": "node scripts/format.js"
   },
   "license": "BSD-3-Clause"
 }
